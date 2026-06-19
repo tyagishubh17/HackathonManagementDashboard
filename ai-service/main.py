@@ -20,6 +20,8 @@ from dotenv import load_dotenv
 from database import connect_db, close_db, get_db
 from modules.duplicate_detector import run_duplicate_check
 from modules.bias_detector import run_bias_detection
+from modules.review_agent import run_review_agent
+from modules.reviewer_assignment import assign_reviewers
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -76,6 +78,23 @@ class EvaluationRequest(BaseModel):
     tech_stack: list[str] = Field(default_factory=list)
 
 
+class ReviewAgentRequest(BaseModel):
+    reviewer_id: str = Field(..., min_length=1)
+    project_id: str = Field(..., min_length=1)
+    innovation: float = Field(..., ge=0, le=100)
+    technical: float = Field(..., ge=0, le=100)
+    presentation: float = Field(..., ge=0, le=100)
+    final_score: float = Field(..., ge=0, le=100)
+    tech_stack: list[str] = Field(default_factory=list)
+    project_description: str | None = None
+
+
+class ReviewerAssignRequest(BaseModel):
+    reviewers: list[dict] = Field(..., min_items=1)
+    projects: list[dict] = Field(..., min_items=1)
+    max_reviews_per_reviewer: int = Field(default=2, ge=1, le=10)
+
+
 # ─── Health Check ─────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -112,6 +131,35 @@ async def bias_detect(payload: EvaluationRequest, db=Depends(get_db)):
         return result
     except Exception as exc:
         logger.exception("Bias detection failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/review-agent")
+async def review_agent(payload: ReviewAgentRequest):
+    """
+    Generate a review agent recommendation that decomposes the rubric,
+    evaluates score consistency, and triggers human review when a minority
+    judge flags a concern.
+    """
+    try:
+        result = run_review_agent(payload.model_dump())
+        return result
+    except Exception as exc:
+        logger.exception("Review agent failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/reviewer-assign")
+async def reviewer_assign(payload: ReviewerAssignRequest):
+    """
+    Assign reviewers to projects using a multi-objective scoring function and
+    perturbed maximization for controlled randomness.
+    """
+    try:
+        result = assign_reviewers(payload.model_dump())
+        return result
+    except Exception as exc:
+        logger.exception("Reviewer assignment failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
