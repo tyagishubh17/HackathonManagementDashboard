@@ -107,6 +107,65 @@ router.post(
   }
 );
 
+// POST /api/reviews/agent
+router.post(
+  "/agent",
+  [
+    body("reviewer_id").trim().notEmpty(),
+    body("project_id").trim().notEmpty(),
+    body("innovation").isFloat({ min: 0, max: 100 }),
+    body("technical").isFloat({ min: 0, max: 100 }),
+    body("presentation").isFloat({ min: 0, max: 100 }),
+    body("final_score").isFloat({ min: 0, max: 100 }),
+    body("tech_stack").optional().isArray(),
+    body("project_description").optional().isString(),
+  ],
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+      const aiResponse = await axios.post(
+        `${AI_SERVICE}/api/review-agent`,
+        req.body,
+        { timeout: 5000 }
+      );
+      return res.json(aiResponse.data);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/reviews/assign
+router.post(
+  "/assign",
+  [
+    body("reviewers").isArray({ min: 1 }),
+    body("projects").isArray({ min: 1 }),
+    body("max_reviews_per_reviewer").optional().isInt({ min: 1, max: 10 }),
+  ],
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+      const aiResponse = await axios.post(
+        `${AI_SERVICE}/api/reviewer-assign`,
+        req.body,
+        { timeout: 5000 }
+      );
+      return res.json(aiResponse.data);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // GET /api/reviews/audit/bias
 router.get("/audit/bias", async (req, res, next) => {
   try {
