@@ -1,0 +1,10 @@
+SPREADSHEET_ID = "1paIyyc-xQ-vd73ksQ5zEiYxjmcEdgpbTfayXmtuqEhg"
+SERVICE_ACCOUNT_PATH = "config/service_account.json"
+WORKSHEET_INDEX = 0                                                    
+TEAM_SIZE = 4                                       
+BALANCE_TOLERANCE = 1.5                                            
+MONGO_URI = "mongodb://localhost:27017"                                    
+MONGO_DB_NAME = "hackathon_dashboard"
+HACKATHON_ID = "college_hackathon_2026"                                       
+CLEAR_EXISTING_DATA = True                                                                
+RESUME_DOWNLOAD_DIR = "data/resumes"
