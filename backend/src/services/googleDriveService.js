@@ -49,14 +49,18 @@ exports.uploadFile = async (fileBuffer, fileName, mimeType) => {
         fields: "id, webViewLink, webContentLink",
       });
 
-      // Set "anyone with link can view" permission
-      await drive.permissions.create({
-        fileId: file.data.id,
-        requestBody: {
-          role: "reader",
-          type: "anyone",
-        },
-      });
+      // Try to set "anyone with link can view" permission
+      try {
+        await drive.permissions.create({
+          fileId: file.data.id,
+          requestBody: {
+            role: "reader",
+            type: "anyone",
+          },
+        });
+      } catch (permErr) {
+        console.warn("Failed to set public permissions on Google Drive file (might be restricted by domain):", permErr.message);
+      }
 
       return {
         fileId: file.data.id,
@@ -99,4 +103,20 @@ exports.deleteFile = async (fileId, isLocal = false) => {
       console.error("Failed to delete from Google Drive:", err);
     }
   }
+};
+
+exports.downloadFileStream = async (fileId, isLocal = false) => {
+  if (isLocal) {
+    const localPath = path.join(fallbackDir, fileId);
+    if (fs.existsSync(localPath)) {
+      return { stream: fs.createReadStream(localPath), isLocal: true };
+    }
+    throw new Error("File not found locally");
+  }
+
+  if (drive) {
+    const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
+    return { stream: response.data, isLocal: false };
+  }
+  throw new Error("Google Drive not configured");
 };

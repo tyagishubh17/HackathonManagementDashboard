@@ -50,6 +50,8 @@ const registrationSchema = new mongoose.Schema(
     waitlistPosition: Number,
 
     checkedInAt: Date,
+
+    lastSeenProblemUpdate: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );

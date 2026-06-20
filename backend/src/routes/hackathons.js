@@ -13,6 +13,9 @@ const {
   deleteProblemStatement,
   getPublicHackathons,
   getPublicHackathonById,
+  downloadProblemStatementFile,
+  postAnnouncement,
+  deleteAnnouncement,
 } = require("../controllers/hackathonController");
 
 const router = express.Router();
@@ -30,6 +33,7 @@ const upload = multer({
 // Public Routes (No Auth)
 router.get("/", getPublicHackathons);
 router.get("/:id/public", getPublicHackathonById);
+router.get("/:id/problem-statements/:problemId/download", downloadProblemStatementFile);
 
 // Mount nested routers
 router.use("/:id/registrations", registrationRouter);
@@ -59,8 +63,11 @@ router.delete("/:id", deleteHackathon);
 
 // Actions
 router.post("/:id/publish", requireOrganizer, publishHackathon);
-router.post("/:id/problem-statements", requireOrganizer, addProblemStatement);
-router.put("/:id/problem-statements/:problemId", requireOrganizer, updateProblemStatement);
+router.post("/:id/problem-statements", requireOrganizer, upload.single("referenceFile"), addProblemStatement);
+router.put("/:id/problem-statements/:problemId", requireOrganizer, upload.single("referenceFile"), updateProblemStatement);
 router.delete("/:id/problem-statements/:problemId", requireOrganizer, deleteProblemStatement);
+
+router.post("/:id/announcements", requireOrganizer, postAnnouncement);
+router.delete("/:id/announcements/:announcementId", requireOrganizer, deleteAnnouncement);
 
 module.exports = router;

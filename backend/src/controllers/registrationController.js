@@ -64,6 +64,8 @@ exports.registerForHackathon = async (req, res) => {
     const userData = {
       email: req.user.email,
       fullName: req.user.fullName,
+      phone: req.user.phone || req.body.phone,
+      institution: req.body.institution,
       skills: req.body.skills,
       experienceLevel: req.body.experienceLevel,
       resumeText,
@@ -273,5 +275,41 @@ exports.getRegistrationStats = async (req, res) => {
     res.status(200).json({ success: true, data: stats[0] });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+exports.acknowledgeProblemUpdate = async (req, res) => {
+  try {
+    const reg = await Registration.findOne({ hackathonId: req.params.id, userId: req.user._id });
+    if (!reg) return res.status(404).json({ message: "Registration not found" });
+
+    reg.lastSeenProblemUpdate = new Date();
+    await reg.save();
+
+    res.status(200).json({ success: true, message: "Update acknowledged" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const { downloadFileStream } = require("../services/googleDriveService");
+
+exports.downloadResumeFile = async (req, res) => {
+  try {
+    const reg = await Registration.findById(req.params.registrationId);
+    if (!reg || !reg.resumeFile || !reg.resumeFile.driveFileId) {
+      return res.status(404).json({ message: "Resume not found" });
+    }
+    
+    // Check if the user is authorized (handled by middleware, but ensure it exists)
+    res.setHeader("Content-Disposition", `inline; filename="${reg.resumeFile.fileName}"`);
+    res.setHeader("Content-Type", reg.resumeFile.mimeType || "application/pdf");
+
+    const isLocal = reg.resumeFile.viewUrl && reg.resumeFile.viewUrl.startsWith("/uploads");
+    const { stream } = await downloadFileStream(reg.resumeFile.driveFileId, isLocal);
+    stream.pipe(res);
+  } catch (err) {
+    console.error("Resume proxy error:", err);
+    res.status(500).json({ message: "Failed to load resume" });
   }
 };

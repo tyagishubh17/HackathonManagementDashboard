@@ -27,6 +27,7 @@ const hackathonSchema = z.object({
     weight: z.number().min(0).max(100),
     description: z.string(),
   })),
+  editReason: z.string().optional(),
 });
 
 type HackathonFormData = z.infer<typeof hackathonSchema>;
@@ -170,10 +171,25 @@ export const HackathonForm = ({ initialData, onSuccess }: { initialData?: any, o
               + Add Criterion
             </button>
             
-            <div className="pt-6 border-t mt-8 flex justify-end">
-              <button type="submit" disabled={rubricSum !== 100} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                {initialData ? "Update Hackathon" : "Create Draft"}
-              </button>
+            <div className="pt-6 border-t mt-8">
+              {initialData?.verificationStatus === "verified" && (
+                <div className="mb-6 bg-amber-50 p-4 border border-amber-200 rounded-xl">
+                  <h4 className="font-bold text-amber-900 mb-2">Reason for Edit</h4>
+                  <p className="text-sm text-amber-800 mb-3">Since this hackathon is already verified and published, you must provide a reason for these changes. They will be immediately applied but flagged for review by a Super Admin.</p>
+                  <textarea 
+                    {...register("editReason")} 
+                    rows={3} 
+                    className="w-full border rounded px-3 py-2" 
+                    placeholder="Briefly explain what was changed and why..."
+                    required
+                  ></textarea>
+                </div>
+              )}
+              <div className="flex justify-end">
+                <button type="submit" disabled={rubricSum !== 100} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {initialData ? "Update Hackathon" : "Create Draft"}
+                </button>
+              </div>
             </div>
           </div>
         )}

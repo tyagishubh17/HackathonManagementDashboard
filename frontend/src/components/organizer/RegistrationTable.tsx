@@ -66,8 +66,8 @@ export const RegistrationTable = ({ hackathonId }: { hackathonId: string }) => {
                   ) : "N/A"}
                 </td>
                 <td className="p-3">
-                  {reg.resumeFile?.viewUrl ? (
-                    <a href={reg.resumeFile.viewUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">View File</a>
+                  {reg.resumeFile ? (
+                    <a href={`${api.defaults.baseURL}/hackathons/${hackathonId}/registrations/${reg._id}/resume`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">View File</a>
                   ) : "-"}
                 </td>
                 <td className="p-3">

@@ -9,6 +9,8 @@ const {
   exportRegistrations,
   updateRegistrationStatus,
   getRegistrationStats,
+  acknowledgeProblemUpdate,
+  downloadResumeFile,
 } = require("../controllers/registrationController");
 const Hackathon = require("../models/Hackathon");
 
@@ -39,11 +41,13 @@ router.use(authenticate);
 router.post("/register", upload.single("resume"), registerForHackathon);
 router.get("/my-registration", getMyRegistration);
 router.delete("/register", cancelRegistration);
+router.post("/my-registration/acknowledge-update", acknowledgeProblemUpdate);
 
 // Organizer routes
 router.get("/", requireOrganizerOrSuperAdmin, getRegistrations);
 router.get("/export", requireOrganizerOrSuperAdmin, exportRegistrations);
 router.get("/stats", requireOrganizerOrSuperAdmin, getRegistrationStats);
 router.put("/:registrationId/status", requireOrganizerOrSuperAdmin, updateRegistrationStatus);
+router.get("/:registrationId/resume", requireOrganizerOrSuperAdmin, downloadResumeFile);
 
 module.exports = router;

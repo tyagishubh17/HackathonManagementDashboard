@@ -17,7 +17,12 @@ export default function HackathonOverview() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="bg-white rounded-2xl border shadow-sm p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Event Details</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-900">Event Details</h2>
+          <a href={`/organizer/hackathons/${id}/edit`} className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">
+            Edit Details
+          </a>
+        </div>
         <div className="space-y-4">
           <div>
             <p className="text-sm text-gray-500">Description</p>

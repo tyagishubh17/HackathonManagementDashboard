@@ -155,3 +155,106 @@ exports.getAllUsers = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.updateUser = async (req, res) => {
+  try {
+    const { fullName, email, role } = req.body;
+    
+    // Check if user exists
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Email uniqueness check if email is being updated
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ message: "Email already in use" });
+      }
+    }
+
+    user.fullName = fullName || user.fullName;
+    user.email = email || user.email;
+    if (role) {
+      user.role = role;
+    }
+
+    await user.save();
+
+    res.status(200).json({ success: true, data: user, message: "User updated successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Using mongoose-delete plugin's delete method for soft delete
+    await user.delete();
+
+    res.status(200).json({ success: true, message: "User deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.acknowledgeHackathonEdit = async (req, res) => {
+  try {
+    const hackathon = await Hackathon.findById(req.params.id);
+    if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
+
+    hackathon.hasUnreviewedEdits = false;
+    hackathon.editReason = null;
+    await hackathon.save();
+
+    res.status(200).json({ success: true, data: hackathon });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.rejectHackathonEdit = async (req, res) => {
+  try {
+    const { rejectionReason } = req.body;
+    if (!rejectionReason || rejectionReason.length < 10) {
+      return res.status(400).json({ message: "A reason is required to reject these edits (min 10 chars)." });
+    }
+
+    const hackathon = await Hackathon.findById(req.params.id).populate("organizerId", "email fullName");
+    if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
+
+    // Mark as rejected, unpublish
+    hackathon.verificationStatus = "rejected";
+    hackathon.status = "draft";
+    hackathon.rejectedAt = new Date();
+    hackathon.rejectedBy = req.user._id;
+    hackathon.rejectionReason = rejectionReason;
+    
+    // Clear the unreviewed edits flag since we've rejected the hackathon entirely
+    hackathon.hasUnreviewedEdits = false;
+    hackathon.editReason = null;
+    
+    await hackathon.save();
+
+    await sendEmail({
+      email: hackathon.organizerId.email,
+      subject: "Action Required: Hackathon Edits Rejected",
+      template: "hackathon-rejected",
+      data: { 
+        title: hackathon.title, 
+        organizerName: hackathon.organizerId.fullName,
+        rejectionReason 
+      },
+    });
+
+    res.status(200).json({ success: true, data: hackathon });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

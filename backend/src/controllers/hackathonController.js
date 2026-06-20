@@ -4,6 +4,7 @@ const Team = require("../models/Team");
 const Project = require("../models/Project");
 const User = require("../models/User");
 const sendEmail = require("../utils/email");
+const { uploadFile, deleteFile, downloadFileStream } = require("../services/googleDriveService");
 
 const validateTimeline = (timeline) => {
   const { registrationStart, registrationEnd, hackathonStart, hackathonEnd, submissionDeadline } = timeline;
@@ -121,13 +122,31 @@ exports.updateHackathon = async (req, res) => {
     if (["completed", "cancelled"].includes(hackathon.status)) {
       return res.status(400).json({ message: "Cannot update a completed or cancelled hackathon" });
     }
+    
+    // We allow ongoing/evaluating updates if it's just minor things, but let's keep the existing logic:
     if (hackathon.verificationStatus === "verified" && ["ongoing", "evaluating"].includes(hackathon.status)) {
       return res.status(400).json({ message: "Cannot update settings while event is ongoing" });
+    }
+
+    // Require editReason if verified and updated by organizer
+    if (isOrganizer && hackathon.verificationStatus === "verified") {
+      if (!req.body.editReason || req.body.editReason.trim() === "") {
+        return res.status(400).json({ message: "An edit reason is required for verified hackathons" });
+      }
+      hackathon.hasUnreviewedEdits = true;
+      hackathon.editReason = req.body.editReason;
     }
 
     if (req.body.timeline) {
       const error = validateTimeline(req.body.timeline);
       if (error) return res.status(400).json({ message: error });
+    }
+
+    // Don't accidentally overwrite verification flags if passed by malicious payload
+    delete req.body.verificationStatus;
+    delete req.body.hasUnreviewedEdits;
+    if (!isOrganizer || hackathon.verificationStatus !== "verified") {
+        delete req.body.editReason;
     }
 
     Object.assign(hackathon, req.body);
@@ -209,13 +228,76 @@ exports.publishHackathon = async (req, res) => {
   }
 };
 
+exports.postAnnouncement = async (req, res) => {
+  try {
+    const hackathon = await Hackathon.findById(req.params.id);
+    if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
+    if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
+
+    if (!req.body.text || req.body.text.trim() === "") {
+      return res.status(400).json({ message: "Announcement text is required" });
+    }
+
+    hackathon.announcements.unshift({ text: req.body.text, postedAt: new Date() });
+    await hackathon.save();
+
+    res.status(200).json({ success: true, data: hackathon });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+exports.deleteAnnouncement = async (req, res) => {
+  try {
+    const hackathon = await Hackathon.findById(req.params.id);
+    if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
+    if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
+
+    const announcement = hackathon.announcements.id(req.params.announcementId);
+    if (!announcement) return res.status(404).json({ message: "Announcement not found" });
+
+    hackathon.announcements.pull(req.params.announcementId);
+    await hackathon.save();
+
+    res.status(200).json({ success: true, data: hackathon });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 exports.addProblemStatement = async (req, res) => {
   try {
     const hackathon = await Hackathon.findById(req.params.id);
     if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
     if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
 
-    hackathon.problemStatements.push(req.body);
+    const newStatement = { ...req.body };
+    
+    if (req.file) {
+      const fileExt = req.file.originalname.split('.').pop().toLowerCase();
+      if (!["pdf", "doc", "docx", "xls", "xlsx"].includes(fileExt)) {
+        return res.status(400).json({ message: "Invalid file type. Only PDF, Word, and Excel allowed." });
+      }
+      
+      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      newStatement.referenceFile = {
+        fileId: uploaded.fileId,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        viewUrl: uploaded.webViewLink,
+        downloadUrl: uploaded.webContentLink,
+        isLocal: uploaded.isLocal
+      };
+    }
+
+    if (newStatement.scheduledAt && new Date(newStatement.scheduledAt) > new Date()) {
+      // It's scheduled for the future
+    } else {
+      // If no schedule provided, or it's in the past, post it now
+      newStatement.scheduledAt = new Date();
+    }
+
+    hackathon.problemStatements.push(newStatement);
     await hackathon.save();
     
     res.status(200).json({ success: true, data: hackathon });
@@ -228,6 +310,7 @@ exports.updateProblemStatement = async (req, res) => {
   try {
     const hackathon = await Hackathon.findById(req.params.id);
     if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
+    if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
     
     const problem = hackathon.problemStatements.id(req.params.problemId);
     if (!problem) return res.status(404).json({ message: "Problem statement not found" });
@@ -238,8 +321,43 @@ exports.updateProblemStatement = async (req, res) => {
         return res.status(400).json({ message: `Cannot set maxTeams lower than currently assigned teams (${assignedTeams})` });
       }
     }
+    
+    const updates = { ...req.body };
 
-    Object.assign(problem, req.body);
+    if (req.file) {
+      const fileExt = req.file.originalname.split('.').pop().toLowerCase();
+      if (!["pdf", "doc", "docx", "xls", "xlsx"].includes(fileExt)) {
+        return res.status(400).json({ message: "Invalid file type. Only PDF, Word, and Excel allowed." });
+      }
+      
+      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      updates.referenceFile = {
+        fileId: uploaded.fileId,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        viewUrl: uploaded.webViewLink,
+        downloadUrl: uploaded.webContentLink,
+        isLocal: uploaded.isLocal
+      };
+      
+      // Attempt to delete old file if it exists
+      if (problem.referenceFile && problem.referenceFile.fileId) {
+        deleteFile(problem.referenceFile.fileId, problem.referenceFile.isLocal).catch(console.error);
+      }
+    }
+
+    // Check if it's currently live and being updated
+    if (problem.scheduledAt && new Date(problem.scheduledAt) <= new Date()) {
+      // It was live. Any update triggers an updatedAt for the participant popup
+      updates.updatedAt = new Date();
+    }
+
+    // If they change the schedule to "Now"
+    if (updates.scheduledAt && new Date(updates.scheduledAt) <= new Date()) {
+      updates.scheduledAt = new Date();
+    }
+
+    Object.assign(problem, updates);
     await hackathon.save();
     
     res.status(200).json({ success: true, data: hackathon });
@@ -317,5 +435,34 @@ exports.getPublicHackathonById = async (req, res) => {
     res.status(200).json({ success: true, data: hackathon.toPublicJSON() });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+exports.downloadProblemStatementFile = async (req, res) => {
+  try {
+    const hackathon = await Hackathon.findOne({
+      _id: req.params.id,
+      verificationStatus: "verified",
+    });
+
+    if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
+
+    const problem = hackathon.problemStatements.id(req.params.problemId);
+    if (!problem || !problem.referenceFile || !problem.referenceFile.fileId) {
+      return res.status(404).json({ message: "File not found" });
+    }
+
+    if (problem.scheduledAt && new Date(problem.scheduledAt) > new Date()) {
+      return res.status(403).json({ message: "This file is not yet available for download" });
+    }
+
+    res.setHeader("Content-Disposition", `attachment; filename="${problem.referenceFile.fileName}"`);
+    res.setHeader("Content-Type", problem.referenceFile.mimeType || "application/octet-stream");
+
+    const { stream } = await downloadFileStream(problem.referenceFile.fileId, problem.referenceFile.isLocal);
+    stream.pipe(res);
+  } catch (err) {
+    console.error("Download Error:", err);
+    res.status(500).json({ message: "Failed to download file" });
   }
 };

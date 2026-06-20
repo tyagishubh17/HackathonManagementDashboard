@@ -41,6 +41,12 @@ const hackathonSchema = new mongoose.Schema(
       maxParticipants: { type: Number },
     },
     rubric: [rubricItemSchema],
+    announcements: [
+      {
+        text: { type: String, required: true },
+        postedAt: { type: Date, default: Date.now },
+      }
+    ],
     problemStatements: [
       {
         title: { type: String, required: true },
@@ -48,6 +54,16 @@ const hackathonSchema = new mongoose.Schema(
         category: { type: String, enum: ["Web", "App", "AI", "Blockchain", "Hardware", "Open Innovation"] },
         difficulty: { type: String, enum: ["easy", "medium", "hard"], default: "medium" },
         maxTeams: { type: Number },
+        scheduledAt: { type: Date },
+        updatedAt: { type: Date },
+        referenceFile: {
+          fileId: String,
+          fileName: String,
+          mimeType: String,
+          viewUrl: String,
+          downloadUrl: String,
+          isLocal: Boolean
+        }
       },
     ],
     prizes: [
@@ -76,6 +92,8 @@ const hackathonSchema = new mongoose.Schema(
     publishedAt: { type: Date },
     cancelledAt: { type: Date },
     cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    hasUnreviewedEdits: { type: Boolean, default: false },
+    editReason: { type: String, default: null },
   },
   { timestamps: true }
 );
@@ -125,7 +143,30 @@ hackathonSchema.methods.toPublicJSON = function () {
       maxParticipants: this.config.maxParticipants,
     },
     rubric: this.rubric.map((r) => ({ criteria: r.criteria, description: r.description })),
-    problemStatements: this.problemStatements.map((p) => ({ id: p._id, title: p.title, description: p.description, category: p.category, difficulty: p.difficulty })),
+    problemStatements: this.problemStatements.map((p) => {
+      const isUpcoming = p.scheduledAt && new Date(p.scheduledAt) > new Date();
+      if (isUpcoming) {
+        return {
+          id: p._id,
+          title: p.title,
+          category: p.category,
+          scheduledAt: p.scheduledAt,
+          isUpcoming: true,
+        };
+      }
+      return {
+        id: p._id,
+        title: p.title,
+        description: p.description,
+        category: p.category,
+        difficulty: p.difficulty,
+        scheduledAt: p.scheduledAt,
+        updatedAt: p.updatedAt,
+        referenceFile: p.referenceFile,
+        isUpcoming: false,
+      };
+    }),
+    announcements: this.announcements ? this.announcements.map((a) => ({ id: a._id, text: a.text, postedAt: a.postedAt })) : [],
     stats: { participantsCount: this.stats.participantsCount },
     organizer: this.organizerId ? { id: this.organizerId._id, name: this.organizerId.fullName } : null,
     faq: this.faq,

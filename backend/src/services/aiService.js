@@ -16,10 +16,15 @@ exports.checkDuplicate = async (userData, existingParticipants) => {
 
   while (attempts <= maxRetries) {
     try {
-      const response = await aiClient.post("/api/duplicate-check", {
-        userData,
-        existingParticipants,
-      });
+      const payload = {
+        name: userData.fullName || "",
+        email: userData.email || "",
+        phone: userData.phone || "0000000000",
+        college: userData.institution || "Unknown",
+        skills: Array.isArray(userData.skills) ? userData.skills : (typeof userData.skills === 'string' ? userData.skills.split(',') : [])
+      };
+      
+      const response = await aiClient.post("/api/duplicate-check", payload);
       return response.data;
     } catch (err) {
       attempts++;
