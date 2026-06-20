@@ -8,7 +8,7 @@ def _normalize_skills(values: list[str]) -> set[str]:
 
 def _skill_match_score(reviewer: dict, project: dict) -> float:
     reviewer_skills = _normalize_skills(reviewer.get("expertise", []))
-    project_skills = _normalize_skills(project.get("tech_stack", []))
+    project_skills = _normalize_skills(project.get("tech_stack", []) or project.get("techStack", []))
     if not project_skills or not reviewer_skills:
         return 0.0
     return float(len(reviewer_skills & project_skills)) / float(len(project_skills))
@@ -44,20 +44,21 @@ def _perturbed_score(base_score: float, project_id: str, reviewer_id: str) -> fl
 
 
 def assign_reviewers(payload: dict) -> dict:
-    reviewers = payload.get("reviewers", [])
-    projects = payload.get("projects", [])
-    max_reviews = int(payload.get("max_reviews_per_reviewer", 2))
+    # Support both simple and nested request bodies
+    reviewers = payload.get("reviewers") or payload.get("judges") or []
+    projects = payload.get("projects") or payload.get("projects_to_review") or []
+    max_reviews = int(payload.get("max_reviews_per_reviewer", payload.get("reviewsPerProject", 2)))
     if max_reviews < 1:
         max_reviews = 2
 
     assignments = []
-    reviewer_loads = {str(r.get("id")): int(r.get("workload", 0)) for r in reviewers}
+    reviewer_loads = {str(r.get("id") or r.get("_id")): int(r.get("workload", 0)) for r in reviewers}
 
     for project in projects:
         scores = []
         for reviewer in reviewers:
-            reviewer_id = str(reviewer.get("id"))
-            project_id = str(project.get("id"))
+            reviewer_id = str(reviewer.get("id") or reviewer.get("_id"))
+            project_id = str(project.get("id") or project.get("_id"))
             if reviewer_loads.get(reviewer_id, 0) >= max_reviews:
                 continue
 
@@ -89,7 +90,7 @@ def assign_reviewers(payload: dict) -> dict:
         if not scores:
             assignments.append(
                 {
-                    "project_id": project.get("id"),
+                    "project_id": project.get("id") or project.get("_id"),
                     "assigned_reviewer_id": None,
                     "status": "unassigned",
                     "reason": "no eligible reviewer found",
@@ -97,20 +98,28 @@ def assign_reviewers(payload: dict) -> dict:
             )
             continue
 
-        best = max(scores, key=lambda item: item["score"])
-        reviewer_loads[best["reviewer_id"]] = reviewer_loads.get(best["reviewer_id"], 0) + 1
+        # Choose top 2 reviewers for each project to build a panel
+        best_reviewers = sorted(scores, key=lambda item: item["score"], reverse=True)[:2]
+        for best in best_reviewers:
+            reviewer_loads[best["reviewer_id"]] = reviewer_loads.get(best["reviewer_id"], 0) + 1
 
         assignments.append(
             {
-                "project_id": project.get("id"),
-                "assigned_reviewer_id": best["reviewer_id"],
-                "objective_score": round(best["score"] * 100.0, 2),
-                "breakdown": {
-                    "expertise_alignment": best["expertise_alignment"],
-                    "workload_balance": best["workload_balance"],
-                    "conflict_free": best["conflict_free"],
-                    "diversity": best["diversity"],
-                },
+                "project_id": project.get("id") or project.get("_id"),
+                "assigned_reviewer_ids": [best["reviewer_id"] for best in best_reviewers],
+                "reviewerIds": [best["reviewer_id"] for best in best_reviewers],
+                "objective_score": round(best_reviewers[0]["score"] * 100.0, 2),
+                "breakdown": [
+                    {
+                        "reviewer_id": best["reviewer_id"],
+                        "expertise_alignment": best["expertise_alignment"],
+                        "workload_balance": best["workload_balance"],
+                        "conflict_free": best["conflict_free"],
+                        "diversity": best["diversity"],
+                        "assignment_score": round(best["score"] * 100.0, 2),
+                    }
+                    for best in best_reviewers
+                ],
             }
         )
 
@@ -124,6 +133,6 @@ def assign_reviewers(payload: dict) -> dict:
                 "diversity": 10,
             },
             "max_reviews_per_reviewer": max_reviews,
-            "algorithm": "perturbed_maximization",
+            "algorithm": "perturbed_panel_assignment",
         },
     }
