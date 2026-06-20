@@ -52,11 +52,8 @@ exports.formTeams = async (participants, config) => {
 
 exports.assignReviewers = async (judges, projects, config) => {
   try {
-    const response = await aiClient.post("/api/reviewer-assign", {
-      judges,
-      projects,
-      config,
-    });
+    const payload = { judges, projects, ...config };
+    const response = await aiClient.post("/api/reviewer-assign", payload);
     return response.data; // { assignments: [{ projectId, reviewerIds: [] }] }
   } catch (err) {
     console.error("AI Reviewer assignment failed:", err.message);

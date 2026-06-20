@@ -91,6 +91,8 @@ class ReviewAgentRequest(BaseModel):
     final_score: float = Field(..., ge=0, le=100)
     tech_stack: list[str] = Field(default_factory=list)
     project_description: str | None = None
+    project_text: str | None = None
+    pdf_text: str | None = None
 
 
 class ReviewerAssignRequest(BaseModel):
