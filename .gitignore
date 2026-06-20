@@ -1,70 +1,46 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
+# IDE and OS
+.cursor/
+.vscode/
+.idea/
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
 
-# env files — real secrets, never commit
-.env
-.env.local
-.env.development
-.env.production
-.env.test
-backend/.env
-ai-service/.env
+# Next.js / Build outputs
+.next/
+dist/
+build/
+coverage/
 
-# keep example files so others know what vars are needed
-!.env.local.example
-!backend/.env.example
-!ai-service/.env.example
-
-# Python virtual environments
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 .venv/
 venv/
 env/
 ENV/
-__pycache__/
-*.py[cod]
-*.pyo
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
 
-# Python egg / dist artifacts
-*.egg-info/
-dist/
-build/
-.eggs/
+# Environment Variables (Keep Secrets Safe!)
+.env
+.env.*
+!.env.example
+!.env.template
 
-# Backend node_modules
-backend/node_modules/
+# Logs
+logs/
+*.log
 
-# vercel
-.vercel
+# Docker
+.docker/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# GCP Credentials
+*service-account.json

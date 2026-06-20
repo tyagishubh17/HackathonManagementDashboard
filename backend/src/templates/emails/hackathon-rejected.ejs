@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><style>body { font-family: sans-serif; line-height: 1.6; }</style></head>
+<body>
+  <h2>Action Required: Hackathon Needs Changes</h2>
+  <p>Hello <%= organizerName %>,</p>
+  <p>We reviewed your hackathon <strong><%= title %></strong>, but it currently cannot be verified for the following reason:</p>
+  <blockquote style="border-left: 4px solid #ccc; padding-left: 10px; color: #555;">
+    <%= rejectionReason %>
+  </blockquote>
+  <p>Your hackathon has been reverted to Draft status. Please make the necessary adjustments in your organizer dashboard and re-publish for verification.</p>
+  <p>Best,<br>FAIRJUDGE Team</p>
+</body>
+</html>

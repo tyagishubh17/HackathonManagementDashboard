@@ -1,0 +1,18 @@
+module.exports = {
+  User: require("./User"),
+  Hackathon: require("./Hackathon"),
+  Registration: require("./Registration"),
+  Team: require("./Team"),
+  Project: require("./Project"),
+  Evaluation: require("./Evaluation"),
+  Announcement: require("./Announcement"),
+  Certificate: require("./Certificate"),
+  ChatMessage: require("./ChatMessage"),
+  KnowledgeBase: require("./KnowledgeBase"),
+  KnowledgeBaseChunk: require("./KnowledgeBaseChunk"),
+  BiasAuditLog: require("./BiasAuditLog"),
+  DuplicateAuditLog: require("./DuplicateAuditLog"),
+  Notification: require("./Notification"),
+  ActivityLog: require("./ActivityLog"),
+  UserSettings: require("./UserSettings"),
+};
