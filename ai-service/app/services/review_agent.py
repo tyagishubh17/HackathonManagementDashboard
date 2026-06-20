@@ -1,138 +1,310 @@
-import random
-from typing import Any
+def _normalize_text(text: str) -> str:
+    return (text or "").lower().strip()
 
 
-def _normalize_skills(values: list[str]) -> set[str]:
-    return {v.strip().lower() for v in values if isinstance(v, str) and v.strip()}
+def _text_keyword_count(text: str, keywords: list[str]) -> int:
+    lower_text = _normalize_text(text)
+    return sum(1 for kw in keywords if kw and kw in lower_text)
 
 
-def _skill_match_score(reviewer: dict, project: dict) -> float:
-    reviewer_skills = _normalize_skills(reviewer.get("expertise", []))
-    project_skills = _normalize_skills(project.get("tech_stack", []) or project.get("techStack", []))
-    if not project_skills or not reviewer_skills:
+def _tech_stack_text_score(tech_stack: list[str], text: str) -> float:
+    text_lower = _normalize_text(text)
+    if not tech_stack or not text_lower:
         return 0.0
-    return float(len(reviewer_skills & project_skills)) / float(len(project_skills))
+
+    normalized = {t.lower().strip() for t in tech_stack if isinstance(t, str) and t.strip()}
+    matches = 0
+    for token in normalized:
+        if token and token in text_lower:
+            matches += 1
+    return float(matches) / max(1.0, len(normalized))
 
 
-def _workload_balance_score(reviewer: dict, max_reviews_per_reviewer: int) -> float:
-    workload = float(reviewer.get("workload", 0))
-    if max_reviews_per_reviewer <= 0:
-        return 0.0
-    return max(0.0, 1.0 - min(workload / float(max_reviews_per_reviewer), 1.0))
+def _estimate_ai_rubric(project_text: str, tech_stack: list[str]) -> dict:
+    text = _normalize_text(project_text)
+    tech_match = _tech_stack_text_score(tech_stack, text)
+    innovation_keywords = [
+        "innovation",
+        "novel",
+        "unique",
+        "first",
+        "breakthrough",
+        "patent",
+        "impact",
+        "solution",
+        "prototype",
+        "creative",
+    ]
+    technical_keywords = [
+        "architecture",
+        "performance",
+        "scalability",
+        "backend",
+        "api",
+        "deployment",
+        "model",
+        "algorithm",
+        "database",
+        "integration",
+        "security",
+    ]
+    presentation_keywords = [
+        "demo",
+        "prototype",
+        "story",
+        "clarity",
+        "design",
+        "user experience",
+        "ux",
+        "ui",
+        "presentation",
+        "impact",
+        "engaging",
+    ]
 
+    length_boost = min(1.0, len(text) / 2200.0)
+    innovation = 35 + min(40, _text_keyword_count(text, innovation_keywords) * 8) + length_boost * 15
+    technical = 30 + tech_match * 45 + min(15, _text_keyword_count(text, technical_keywords) * 5) + length_boost * 10
+    presentation = 30 + min(40, _text_keyword_count(text, presentation_keywords) * 8) + length_boost * 15
 
-def _conflict_score(reviewer: dict, project: dict) -> float:
-    conflicts = set(reviewer.get("conflicts", []))
-    project_conflicts = set(project.get("conflicts", []))
-    if str(project.get("id")) in conflicts or str(reviewer.get("id")) in project_conflicts:
-        return 0.0
-    return 1.0
-
-
-def _diversity_score(reviewer: dict, project: dict) -> float:
-    reviewer_affiliation = (reviewer.get("affiliation") or "").strip().lower()
-    project_affiliation = (project.get("owner_affiliation") or "").strip().lower()
-    if not reviewer_affiliation or not project_affiliation:
-        return 0.5
-    return 1.0 if reviewer_affiliation != project_affiliation else 0.6
-
-
-def _perturbed_score(base_score: float, project_id: str, reviewer_id: str) -> float:
-    key = f"{project_id}:{reviewer_id}"
-    noise = random.Random(key).uniform(-0.025, 0.025)
-    return base_score + noise
-
-
-def assign_reviewers(payload: dict) -> dict:
-    # Support both simple and nested request bodies
-    reviewers = payload.get("reviewers") or payload.get("judges") or []
-    projects = payload.get("projects") or payload.get("projects_to_review") or []
-    max_reviews = int(payload.get("max_reviews_per_reviewer", payload.get("reviewsPerProject", 2)))
-    if max_reviews < 1:
-        max_reviews = 2
-
-    assignments = []
-    reviewer_loads = {str(r.get("id") or r.get("_id")): int(r.get("workload", 0)) for r in reviewers}
-
-    for project in projects:
-        scores = []
-        for reviewer in reviewers:
-            reviewer_id = str(reviewer.get("id") or reviewer.get("_id"))
-            project_id = str(project.get("id") or project.get("_id"))
-            if reviewer_loads.get(reviewer_id, 0) >= max_reviews:
-                continue
-
-            skill_score = _skill_match_score(reviewer, project)
-            workload_score = _workload_balance_score(reviewer, max_reviews)
-            conflict_score = _conflict_score(reviewer, project)
-            diversity_score = _diversity_score(reviewer, project)
-
-            if conflict_score <= 0.0:
-                continue
-
-            objective = (
-                0.40 * skill_score
-                + 0.30 * workload_score
-                + 0.20 * conflict_score
-                + 0.10 * diversity_score
-            )
-            scores.append(
-                {
-                    "reviewer_id": reviewer_id,
-                    "score": _perturbed_score(objective, project_id, reviewer_id),
-                    "expertise_alignment": round(skill_score * 100.0, 2),
-                    "workload_balance": round(workload_score * 100.0, 2),
-                    "conflict_free": bool(conflict_score > 0.0),
-                    "diversity": round(diversity_score * 100.0, 2),
-                }
-            )
-
-        if not scores:
-            assignments.append(
-                {
-                    "project_id": project.get("id") or project.get("_id"),
-                    "assigned_reviewer_id": None,
-                    "status": "unassigned",
-                    "reason": "no eligible reviewer found",
-                }
-            )
-            continue
-
-        # Choose top 2 reviewers for each project to build a panel
-        best_reviewers = sorted(scores, key=lambda item: item["score"], reverse=True)[:2]
-        for best in best_reviewers:
-            reviewer_loads[best["reviewer_id"]] = reviewer_loads.get(best["reviewer_id"], 0) + 1
-
-        assignments.append(
-            {
-                "project_id": project.get("id") or project.get("_id"),
-                "assigned_reviewer_ids": [best["reviewer_id"] for best in best_reviewers],
-                "reviewerIds": [best["reviewer_id"] for best in best_reviewers],
-                "objective_score": round(best_reviewers[0]["score"] * 100.0, 2),
-                "breakdown": [
-                    {
-                        "reviewer_id": best["reviewer_id"],
-                        "expertise_alignment": best["expertise_alignment"],
-                        "workload_balance": best["workload_balance"],
-                        "conflict_free": best["conflict_free"],
-                        "diversity": best["diversity"],
-                        "assignment_score": round(best["score"] * 100.0, 2),
-                    }
-                    for best in best_reviewers
-                ],
-            }
-        )
+    if len(text) < 250:
+        presentation = min(presentation, 45)
 
     return {
-        "assignments": assignments,
-        "metadata": {
-            "weighting": {
-                "expertise": 40,
-                "workload": 30,
-                "conflict_avoidance": 20,
-                "diversity": 10,
-            },
-            "max_reviews_per_reviewer": max_reviews,
-            "algorithm": "perturbed_panel_assignment",
-        },
+        "innovation": round(max(0.0, min(100.0, innovation)), 2),
+        "technical": round(max(0.0, min(100.0, technical)), 2),
+        "presentation": round(max(0.0, min(100.0, presentation)), 2),
     }
+
+
+def _ai_confidence(tech_stack: list[str], project_text: str) -> float:
+    tech_match = _tech_stack_text_score(tech_stack, project_text)
+    text_length = len(_normalize_text(project_text))
+    confidence = 0.35 + tech_match * 0.4 + min(0.25, text_length / 2500.0)
+    return round(max(0.0, min(1.0, confidence)), 2)
+
+
+def _final_score_from_rubric(rubric: dict) -> float:
+    return round((rubric["innovation"] + rubric["technical"] + rubric["presentation"]) / 3.0, 2)
+
+
+def _rubric_breakdown(review: dict) -> dict:
+    feasibility = round((review.get("technical", 0) + review.get("presentation", 0)) / 2, 2)
+    overall = round(
+        (
+            review.get("innovation", 0)
+            + review.get("technical", 0)
+            + review.get("presentation", 0)
+        )
+        / 3,
+        2,
+    )
+    return {
+        "innovation": float(review.get("innovation", 0)),
+        "technical": float(review.get("technical", 0)),
+        "presentation": float(review.get("presentation", 0)),
+        "feasibility": float(feasibility),
+        "overall": float(overall),
+    }
+
+
+def _judge_vote(review: dict, style: str) -> dict:
+    innovation = review.get("innovation", 0)
+    technical = review.get("technical", 0)
+    presentation = review.get("presentation", 0)
+    final_score = review.get("final_score", 0)
+
+    concerns = []
+    if final_score < 35 or final_score > 90:
+        concerns.append("outlier_final_score")
+
+    if style == "innovation_focused":
+        if innovation < 45 and innovation + presentation < 120:
+            concerns.append("low_innovation")
+        if innovation > technical + 15:
+            concerns.append("innovation_skew")
+    elif style == "technical_focused":
+        if technical < 50:
+            concerns.append("low_technical_depth")
+        if technical < presentation - 20:
+            concerns.append("technical_underweight")
+    else:  # consensus judge
+        if abs(innovation - technical) > 25 or abs(technical - presentation) > 25:
+            concerns.append("score_inconsistency")
+
+    if feasibility := _rubric_breakdown(review)["feasibility"]:
+        if feasibility < 40 and final_score > 55:
+            concerns.append("feasibility_gap")
+
+    return {
+        "judge": style,
+        "concern_flags": concerns,
+        "recommendation": "human_review" if concerns else "accept",
+    }
+
+
+def _build_feedback(review: dict, rubric: dict) -> list[str]:
+    feedback = []
+    if rubric["innovation"] >= 85:
+        feedback.append("Strong innovation with a clear novel idea.")
+    elif rubric["innovation"] >= 60:
+        feedback.append("Good innovation, but the concept can be sharpened further.")
+    else:
+        feedback.append("The idea needs more originality and novelty.")
+
+    if rubric["technical"] >= 85:
+        feedback.append("Excellent technical depth and implementation approach.")
+    elif rubric["technical"] >= 60:
+        feedback.append("Solid technical work; focus next on polish and scalability.")
+    else:
+        feedback.append("Technical execution needs stronger architecture or validation.")
+
+    if rubric["presentation"] >= 85:
+        feedback.append("Presentation is compelling and clearly communicates value.")
+    elif rubric["presentation"] >= 60:
+        feedback.append("Presentation is adequate but could be more concise and structured.")
+    else:
+        feedback.append("Presentation requires clearer storytelling and stronger delivery.")
+
+    if rubric["feasibility"] < 50:
+        feedback.append(
+            "Feasibility is a concern; clarify implementation plan and next steps."
+        )
+    else:
+        feedback.append(
+            "Feasibility looks reasonable given the team and technology choices."
+        )
+
+    if review.get("project_description"):
+        feedback.append(
+            "Consider aligning the technical roadmap more closely with the core use case."
+        )
+
+    return feedback
+
+
+def _is_suggestion_request(review: dict) -> bool:
+    return bool(review.get("projectData") and review.get("rubric"))
+
+
+def _generate_review_suggestions(payload: dict) -> dict:
+    project = payload.get("projectData", {})
+    rubric = payload.get("rubric", [])
+    project_text = project.get("project_description") or project.get("project_text") or ""
+    tech_stack = project.get("tech_stack", []) or project.get("techStack", [])
+    ai_rubric = _estimate_ai_rubric(project_text, tech_stack)
+    ai_score = _final_score_from_rubric(ai_rubric)
+    confidence = _ai_confidence(tech_stack, project_text)
+
+    return {
+        "project_id": project.get("project_id") or project.get("id"),
+        "suggested_scores": {
+            "innovation": ai_rubric["innovation"],
+            "technical": ai_rubric["technical"],
+            "presentation": ai_rubric["presentation"],
+            "final_score": ai_score,
+        },
+        "rationale": "AI estimated the score from project documentation and tech stack alignment.",
+        "confidence": confidence,
+        "tech_stack_match": round(_tech_stack_text_score(tech_stack, project_text) * 100, 2),
+    }
+
+
+def _average_panel_score(panel: list[dict]) -> float:
+    if not panel:
+        return 0.0
+    scores = [float(item.get("final_score", 0)) for item in panel]
+    return round(sum(scores) / len(scores), 2)
+
+
+def _agreement_percent(ai_score: float, panel_score: float) -> float:
+    return round(max(0.0, 100.0 - abs(ai_score - panel_score)), 2)
+
+
+def run_review_agent(review: dict) -> dict:
+    if _is_suggestion_request(review):
+        return _generate_review_suggestions(review)
+
+    project_text = review.get("project_text") or review.get("pdf_text") or review.get("project_description") or ""
+    tech_stack = review.get("tech_stack", [])
+    ai_rubric = _estimate_ai_rubric(project_text, tech_stack)
+    ai_score = _final_score_from_rubric(ai_rubric)
+    ai_confidence = _ai_confidence(tech_stack, project_text)
+
+    human_panel_scores = review.get("human_panel_scores", []) or []
+    panel_average = _average_panel_score(human_panel_scores) if human_panel_scores else None
+    agreement_percent = _agreement_percent(ai_score, panel_average) if panel_average is not None else None
+    agreement_status = "matched" if agreement_percent is not None and agreement_percent >= 75 else "diverged"
+
+    final_score = ai_score
+    report_to_organizer = False
+    bias_report = None
+    if panel_average is not None:
+        if agreement_status == "matched":
+            final_score = panel_average
+        else:
+            final_score = round(ai_score * 0.6 + panel_average * 0.4, 2)
+            report_to_organizer = True
+            bias_report = {
+                "issue": "Human panel scores diverge from AI predicted score.",
+                "details": f"AI predicted {ai_score}, panel average is {panel_average} ({agreement_percent}% agreement).",
+                "recommended_action": "Review panel evaluation for potential bias or miscalibration.",
+            }
+
+    rubric = _rubric_breakdown(review)
+    votes = [
+        _judge_vote(review, "innovation_focused"),
+        _judge_vote(review, "technical_focused"),
+        _judge_vote(review, "consensus"),
+    ]
+
+    human_review = any(v["recommendation"] == "human_review" for v in votes)
+    minority_veto = human_review
+    recommendation = "human_review" if human_review else "auto_accept"
+    confidence = round(
+        max(
+            0.45,
+            1.0 - (len([v for v in votes if v["recommendation"] == "human_review"]) / 3.0),
+        ),
+        2,
+    )
+
+    feedback_lines = _build_feedback(review, rubric)
+    feedback_text = " ".join(feedback_lines)
+
+    result = {
+        "reviewer_id": review.get("reviewer_id"),
+        "project_id": review.get("project_id"),
+        "rubric": rubric,
+        "feedback": {
+            "summary": feedback_text,
+            "highlights": feedback_lines,
+        },
+        "panel": votes,
+        "ai_estimation": {
+            "rubric": ai_rubric,
+            "final_score": ai_score,
+            "confidence": ai_confidence,
+            "tech_stack_match": round(_tech_stack_text_score(tech_stack, project_text) * 100, 2),
+        },
+        "human_panel": {
+            "scores": human_panel_scores,
+            "average_score": panel_average,
+            "agreement_percent": agreement_percent,
+            "agreement_status": agreement_status,
+        },
+        "final_score": final_score,
+        "report_to_organizer": report_to_organizer,
+        "bias_report": bias_report,
+        "minority_veto": minority_veto,
+        "recommended_action": recommendation,
+        "confidence": confidence,
+    }
+
+    if report_to_organizer:
+        result["organizer_alert"] = {
+            "reason": "Human panel score mismatch with AI prediction",
+            "recommendation": "Notify organizer and perform a bias audit.",
+        }
+
+    return result
