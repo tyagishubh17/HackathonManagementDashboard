@@ -1,7 +1,11 @@
 const Project = require("../models/Project");
 const Hackathon = require("../models/Hackathon");
 const Team = require("../models/Team");
+const Evaluation = require("../models/Evaluation");
 const { uploadFile } = require("../services/googleDriveService");
+const aiService = require("../services/aiService");
+const pdfParse = require("pdf-parse");
+const axios = require("axios");
 
 exports.createProject = async (req, res) => {
   try {
@@ -99,10 +103,76 @@ exports.submitProject = async (req, res) => {
       return res.status(403).json({ message: "Not authorized" });
     }
 
+    if (!project.submissionFiles || project.submissionFiles.length === 0) {
+      return res.status(400).json({ message: "Please upload at least one file before submitting." });
+    }
+
     project.status = "submitted";
     await project.save();
 
-    res.status(200).json({ success: true, data: project });
+    // Extract PDF text for AI evaluation (async, don't wait)
+    setImmediate(async () => {
+      try {
+        let pdfText = "";
+        
+        // Download and extract text from PDF files
+        for (const file of project.submissionFiles) {
+          if (file.fileType === "application/pdf") {
+            try {
+              const response = await axios.get(file.url, { responseType: "arraybuffer" });
+              const pdfData = await pdfParse(response.data);
+              pdfText += pdfData.text + "\n";
+            } catch (err) {
+              console.error("PDF extraction failed:", err.message);
+            }
+          }
+        }
+
+        // Request AI evaluation
+        const aiEvaluation = await aiService.requestAIReview({
+          projectId: project._id.toString(),
+          techStack: project.techStack,
+          projectText: project.description,
+          pdfText: pdfText || "No PDF text available",
+        });
+
+        // Create evaluation records with AI scores
+        const hackathonRubric = hackathon.rubric || {};
+        const evaluationData = {
+          projectId: project._id,
+          hackathonId: hackathon._id,
+          aiSuggestedScores: aiEvaluation.scores || {},
+          status: "ai_evaluated",
+        };
+
+        await Evaluation.updateMany(
+          { projectId: project._id },
+          { ...evaluationData },
+          { new: true }
+        );
+
+        console.log("AI evaluation completed for project:", project._id);
+
+        // Auto-trigger human panels based on the new sequential pipeline design
+        const evaluationController = require("./evaluationController");
+        const mockRequest = { params: { id: hackathon._id.toString() } };
+        const mockResponse = { 
+          status: () => ({ json: () => {} }) 
+        };
+        
+        await evaluationController.assignReviewersAI(mockRequest, mockResponse);
+        console.log("Human judge split panels successfully assigned for project:", project._id);
+
+      } catch (err) {
+        console.error("Pipeline assignment automation error:", err.message);
+      }
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      data: project,
+      message: "Project submitted! AI is analyzing your submission and assigning review panels."
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -118,7 +188,6 @@ exports.getProject = async (req, res) => {
     // Basic role check: if public/organizer/member
     const isMember = project.teamId.members.includes(req.user._id);
     const isOrganizer = req.user.role === "organizer" || req.user.role === "super_admin";
-    // If hackathon is evaluating/completed, projects are usually public, but we enforce member/organizer for now
     if (!isMember && !isOrganizer) return res.status(403).json({ message: "Not authorized to view this project" });
 
     res.status(200).json({ success: true, data: project });
