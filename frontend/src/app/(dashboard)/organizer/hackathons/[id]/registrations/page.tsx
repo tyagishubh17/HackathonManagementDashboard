@@ -21,11 +21,21 @@ export default function RegistrationsManagement() {
   });
 
   const handleStatusUpdate = async (regId: string, newStatus: string) => {
+    let reason: string | undefined;
+    if (newStatus === "rejected") {
+      const input = window.prompt("Enter a rejection reason (minimum 10 characters):");
+      if (input === null) return; // cancelled
+      if (!input || input.trim().length < 10) {
+        alert("Rejection reason must be at least 10 characters.");
+        return;
+      }
+      reason = input.trim();
+    }
     try {
-      await api.put(`/hackathons/${id}/registrations/${regId}/status`, { status: newStatus });
+      await api.put(`/hackathons/${id}/registrations/${regId}/status`, { status: newStatus, ...(reason && { reason }) });
       refetch();
     } catch (err: any) {
-      alert("Failed to update status");
+      alert(err.response?.data?.message || "Failed to update status");
     }
   };
 
@@ -146,8 +156,12 @@ export default function RegistrationsManagement() {
                     {reg.status.replace("_", " ")}
                   </span>
                 </td>
-                <td className="py-4 px-4 font-medium text-gray-600">
-                  {reg.aiDuplicateScore ? `${(reg.aiDuplicateScore * 100).toFixed(0)}%` : 'N/A'}
+                <td className="py-4 px-4">
+                  {reg.duplicateCheckResult?.confidence != null ? (() => {
+                    const pct = reg.duplicateCheckResult.confidence * 100;
+                    const color = pct >= 90 ? 'text-red-700 bg-red-50' : pct >= 70 ? 'text-yellow-700 bg-yellow-50' : 'text-green-700 bg-green-50';
+                    return <span className={`px-2 py-0.5 rounded text-xs font-bold ${color}`}>{pct.toFixed(0)}%</span>;
+                  })() : <span className="text-gray-400 text-xs">N/A</span>}
                 </td>
                 <td className="py-4 px-4 flex gap-2">
                   <button 

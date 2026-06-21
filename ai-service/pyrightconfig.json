@@ -1,0 +1,15 @@
+{
+  "venvPath": "..",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "include": [
+    "app"
+  ],
+  "exclude": [
+    "test_*.py",
+    "uvicorn_test.log",
+    "__pycache__"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
+}
