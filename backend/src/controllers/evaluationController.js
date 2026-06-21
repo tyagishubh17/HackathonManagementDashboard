@@ -14,11 +14,10 @@ exports.assignReviewersAI = async (req, res) => {
     const hackathon = await Hackathon.findById(req.params.id);
     if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
 
-    // In a real app, judges might be mapped in a HackathonJudge collection or User role mapping
-    // Here we'll grab all users with role 'judge' 
+    // 1. Fetch all available users with role 'judge'
     const judges = await User.find({ role: "judge" }).select("_id fullName judgeDetails email");
     
-    // Grab all submitted projects
+    // 2. Grab all submitted projects
     const projects = await Project.find({ hackathonId: hackathon._id, status: "submitted" })
       .populate("teamId", "skillDistribution")
       .select("_id title description techStack teamId");
@@ -27,17 +26,25 @@ exports.assignReviewersAI = async (req, res) => {
       return res.status(400).json({ message: "Need both submitted projects and available judges to run assignment." });
     }
 
-    // Call AI
-    const aiResult = await assignReviewers(judges, projects, { reviewsPerProject: 3 });
-    // Expects { assignments: [{ projectId, reviewerIds: [id1, id2] }] }
+    // 3. Dual-Stage Panel Splitting Rule
+    // Group available human judges into panels of 3 members each
+    const panelSize = 3;
+    const panels = [];
+    for (let i = 0; i < judges.length; i += panelSize) {
+      panels.push(judges.slice(i, i + panelSize));
+    }
 
-    // Create Draft Evaluations
     const createdEvaluations = [];
-    for (const assignment of aiResult.assignments) {
-      for (const revId of assignment.reviewerIds) {
-        // Upsert draft to avoid duplicates
+
+    // 4. Assign projects to panels sequentially using a modulo round-robin shift
+    for (let index = 0; index < projects.length; index++) {
+      const project = projects[index];
+      const assignedPanel = panels[index % panels.length];
+
+      // Upsert draft records for every judge assigned within the chosen panel group
+      for (const judge of assignedPanel) {
         const evalDoc = await Evaluation.findOneAndUpdate(
-          { projectId: assignment.projectId, reviewerId: revId, hackathonId: hackathon._id },
+          { projectId: project._id, reviewerId: judge._id, hackathonId: hackathon._id },
           { status: "draft", totalScore: 0 },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
@@ -45,7 +52,11 @@ exports.assignReviewersAI = async (req, res) => {
       }
     }
 
-    res.status(200).json({ success: true, message: "Assignments generated successfully", count: createdEvaluations.length });
+    res.status(200).json({ 
+      success: true, 
+      message: `Successfully formed ${panels.length} panels and assigned review queues.`, 
+      count: createdEvaluations.length 
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -92,8 +103,14 @@ exports.reassignReviewer = async (req, res) => {
 exports.getMyAssignments = async (req, res) => {
   try {
     const evals = await Evaluation.find({ reviewerId: req.user._id })
-      .populate({ path: "projectId", populate: { path: "hackathonId", select: "title" } })
+      .populate({
+        path: "projectId",
+        select: "title description techStack submissionFiles status",
+        populate: { path: "hackathonId", select: "title timeline" }
+      })
+      .populate("hackathonId", "title rubric")
       .sort("-createdAt");
+    
     res.status(200).json({ success: true, data: evals });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -102,7 +119,14 @@ exports.getMyAssignments = async (req, res) => {
 
 exports.getEvaluation = async (req, res) => {
   try {
-    const evaluation = await Evaluation.findById(req.params.id).populate("projectId");
+    const evaluation = await Evaluation.findById(req.params.id)
+      .populate({
+        path: "projectId",
+        select: "title description techStack submissionFiles",
+        populate: { path: "hackathonId", select: "title rubric timeline" }
+      })
+      .populate("hackathonId", "title rubric timeline");
+    
     if (!evaluation) return res.status(404).json({ message: "Not found" });
     if (evaluation.reviewerId.toString() !== req.user._id.toString() && req.user.role !== "organizer" && req.user.role !== "super_admin") {
       return res.status(403).json({ message: "Unauthorized" });
