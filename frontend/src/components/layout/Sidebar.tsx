@@ -16,6 +16,7 @@ const links = {
     { name: "My Teams", href: "/participant/teams", icon: Users },
     { name: "My Projects", href: "/participant/projects", icon: Folder },
     { name: "Results", href: "/participant/results", icon: Trophy },
+    { name: "Certificates", href: "/participant/certificates", icon: FileText },
   ],
   organizer: [
     { name: "Dashboard", href: "/organizer", icon: LayoutDashboard },

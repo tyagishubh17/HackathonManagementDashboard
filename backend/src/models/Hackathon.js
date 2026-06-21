@@ -95,6 +95,9 @@ const hackathonSchema = new mongoose.Schema(
     hasUnreviewedEdits: { type: Boolean, default: false },
     editReason: { type: String, default: null },
     organizerFeedback: { type: String, default: null },
+    resultsPublished: { type: Boolean, default: false },
+    resultsPublishedAt: { type: Date },
+    certificatesGeneratedAt: { type: Date },
   },
   { timestamps: true }
 );

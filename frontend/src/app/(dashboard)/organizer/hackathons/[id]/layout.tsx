@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, FileText, UserCheck, BarChart, Trophy, Megaphone } from "lucide-react";
+import { Users, FileText, UserCheck, BarChart, Trophy, Megaphone, Award } from "lucide-react";
 
 export default function HackathonHubLayout({ children }: { children: React.ReactNode }) {
   const { id } = useParams();
@@ -45,6 +45,7 @@ export default function HackathonHubLayout({ children }: { children: React.React
     { name: "Problems", href: `/organizer/hackathons/${id}/problem-statements`, icon: FileText },
     { name: "Reviewers", href: `/organizer/hackathons/${id}/reviewers`, icon: UserCheck },
     { name: "Evaluations", href: `/organizer/hackathons/${id}/evaluations`, icon: BarChart },
+    { name: "Results", href: `/organizer/hackathons/${id}/results`, icon: Trophy },
     { name: "Announcements", href: `/organizer/hackathons/${id}/announcements`, icon: Megaphone },
   ];
 

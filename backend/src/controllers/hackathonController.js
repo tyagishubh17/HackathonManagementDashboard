@@ -24,7 +24,7 @@ const validateTimeline = (timeline) => {
 exports.createHackathon = async (req, res) => {
   try {
     const { title, description, timeline, rubric, config, problemStatements } = req.body;
-    
+
     if (timeline) {
       const error = validateTimeline(timeline);
       if (error) return res.status(400).json({ message: error });
@@ -122,7 +122,7 @@ exports.updateHackathon = async (req, res) => {
     if (["completed", "cancelled"].includes(hackathon.status)) {
       return res.status(400).json({ message: "Cannot update a completed or cancelled hackathon" });
     }
-    
+
     // We allow ongoing/evaluating updates if it's just minor things, but let's keep the existing logic:
     if (hackathon.verificationStatus === "verified" && ["ongoing", "evaluating"].includes(hackathon.status)) {
       return res.status(400).json({ message: "Cannot update settings while event is ongoing" });
@@ -267,13 +267,13 @@ exports.addProblemStatement = async (req, res) => {
     if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
 
     const newStatement = { ...req.body };
-    
+
     if (req.file) {
       const fileExt = req.file.originalname.split('.').pop().toLowerCase();
       if (!["pdf", "doc", "docx", "xls", "xlsx"].includes(fileExt)) {
         return res.status(400).json({ message: "Invalid file type. Only PDF, Word, and Excel allowed." });
       }
-      
+
       const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
       newStatement.referenceFile = {
         fileId: uploaded.fileId,
@@ -294,7 +294,7 @@ exports.addProblemStatement = async (req, res) => {
 
     hackathon.problemStatements.push(newStatement);
     await hackathon.save();
-    
+
     res.status(200).json({ success: true, data: hackathon });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -306,7 +306,7 @@ exports.updateProblemStatement = async (req, res) => {
     const hackathon = await Hackathon.findById(req.params.id);
     if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
     if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
-    
+
     const problem = hackathon.problemStatements.id(req.params.problemId);
     if (!problem) return res.status(404).json({ message: "Problem statement not found" });
 
@@ -316,7 +316,7 @@ exports.updateProblemStatement = async (req, res) => {
         return res.status(400).json({ message: `Cannot set maxTeams lower than currently assigned teams (${assignedTeams})` });
       }
     }
-    
+
     const updates = { ...req.body };
 
     if (req.file) {
@@ -324,7 +324,7 @@ exports.updateProblemStatement = async (req, res) => {
       if (!["pdf", "doc", "docx", "xls", "xlsx"].includes(fileExt)) {
         return res.status(400).json({ message: "Invalid file type. Only PDF, Word, and Excel allowed." });
       }
-      
+
       const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
       updates.referenceFile = {
         fileId: uploaded.fileId,
@@ -334,7 +334,7 @@ exports.updateProblemStatement = async (req, res) => {
         downloadUrl: uploaded.webContentLink,
         isLocal: uploaded.isLocal
       };
-      
+
       // Attempt to delete old file if it exists
       if (problem.referenceFile && problem.referenceFile.fileId) {
         deleteFile(problem.referenceFile.fileId, problem.referenceFile.isLocal).catch(console.error);
@@ -354,7 +354,7 @@ exports.updateProblemStatement = async (req, res) => {
 
     Object.assign(problem, updates);
     await hackathon.save();
-    
+
     res.status(200).json({ success: true, data: hackathon });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -387,7 +387,7 @@ exports.deleteProblemStatement = async (req, res) => {
 exports.getPublicHackathons = async (req, res) => {
   try {
     const { search, category, status, page = 1, limit = 10, sort = "-createdAt" } = req.query;
-    
+
     const query = {
       verificationStatus: "verified",
       status: { $in: ["upcoming", "registration_open", "ongoing"] },
