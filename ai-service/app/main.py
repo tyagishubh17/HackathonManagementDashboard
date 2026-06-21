@@ -63,6 +63,8 @@ class ParticipantCheckRequest(BaseModel):
     phone: str = Field(..., max_length=20)
     college: str = Field(..., max_length=300)
     skills: list[str] = Field(default_factory=list)
+    resumeText: str | None = Field(default=None)
+    hackathonId: str | None = Field(default=None)
 
 
 class DuplicateCheckResponse(BaseModel):
@@ -71,6 +73,10 @@ class DuplicateCheckResponse(BaseModel):
     best_match: dict | None
     checked_against: int
     response_time_ms: float
+    isDuplicate: bool | None = None
+    confidence: float | None = None
+    matchedUserId: str | None = None
+    reasons: list[str] | None = None
 
 
 class EvaluationRequest(BaseModel):

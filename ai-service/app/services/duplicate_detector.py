@@ -158,31 +158,182 @@ def classify_score(score: float) -> str:
     return "Unique"
 
 
+EMAIL_REGEX = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+
+
+def _extract_emails_from_text(text: str) -> list[str]:
+    if not text:
+        return []
+    return [email.lower().strip() for email in EMAIL_REGEX.findall(text)]
+
+
+def _extract_phones_from_text(text: str) -> list[str]:
+    if not text:
+        return []
+    # Match sequences of digits, dashes, spaces, parentheses that look like phone numbers
+    matches = re.findall(r'\+?\d[\d\-\s()]{7,}\d', text)
+    extracted = []
+    for m in matches:
+        digits = re.sub(r'\D', '', m)
+        if 9 <= len(digits) <= 15:
+            extracted.append(digits)
+    return extracted
+
+
 async def run_duplicate_check(candidate: dict, db) -> dict:
     """
-    Full pipeline: fetch all existing participants, run fuzzy matching,
-    return top match and classification. Stores audit log in MongoDB.
+    Full pipeline: check candidate against existing registrations (if hackathonId is provided)
+    or the participants database, run fuzzy contact and resume matching,
+    returns composite score and classification. Stores audit log.
     """
     start = time.monotonic()
-
-    participants_col = db["participants"]
     audit_col = db["duplicate_audit_logs"]
 
-    existing_records = await participants_col.find(
-        {}, {"_id": 1, "name": 1, "email": 1, "phone": 1, "college": 1, "skills": 1}
-    ).to_list(length=5000)
+    hackathon_id = candidate.get("hackathonId")
+    existing_records = []
+
+    if hackathon_id:
+        from bson import ObjectId
+        try:
+            hack_id_obj = ObjectId(hackathon_id)
+            registrations_col = db["registrations"]
+            users_col = db["users"]
+
+            existing_regs = await registrations_col.find(
+                {"hackathonId": hack_id_obj, "status": {"$in": ["confirmed", "pending_review", "waitlisted"]}},
+                {"_id": 1, "userId": 1, "skills": 1, "resumeText": 1}
+            ).to_list(length=5000)
+
+            user_ids = [reg["userId"] for reg in existing_regs if reg.get("userId")]
+            users = await users_col.find(
+                {"_id": {"$in": user_ids}},
+                {"_id": 1, "fullName": 1, "email": 1, "phone": 1, "institution": 1, "college": 1}
+            ).to_list(length=len(user_ids) if user_ids else 1)
+
+            user_map = {str(u["_id"]): u for u in users}
+
+            for reg in existing_regs:
+                user_id_str = str(reg.get("userId", ""))
+                user_info = user_map.get(user_id_str, {})
+                email = user_info.get("email", "")
+
+                # Exclude candidate's own email if already registered
+                if email.strip().lower() == candidate.get("email", "").strip().lower():
+                    continue
+
+                existing_records.append({
+                    "id": str(reg["_id"]),
+                    "userId": user_id_str,
+                    "name": user_info.get("fullName", ""),
+                    "email": email,
+                    "phone": user_info.get("phone", ""),
+                    "college": user_info.get("institution", user_info.get("college", "")),
+                    "skills": reg.get("skills", []),
+                    "resumeText": reg.get("resumeText", "")
+                })
+        except Exception as exc:
+            logger.error(f"Failed to query registrations for hackathon duplicate check: {exc}")
+            # Fall back to generic participants
+            hackathon_id = None
+
+    if not hackathon_id:
+        participants_col = db["participants"]
+        records = await participants_col.find(
+            {}, {"_id": 1, "name": 1, "email": 1, "phone": 1, "college": 1, "skills": 1}
+        ).to_list(length=5000)
+        for r in records:
+            existing_records.append({
+                "id": str(r["_id"]),
+                "userId": "",
+                "name": r.get("name", ""),
+                "email": r.get("email", ""),
+                "phone": r.get("phone", ""),
+                "college": r.get("college", ""),
+                "skills": r.get("skills", []),
+                "resumeText": ""
+            })
 
     best_match = None
     best_score = 0.0
+    is_duplicate = False
+    reasons = []
+    matched_user_id = None
+
+    # Extracted details from candidate's resume
+    candidate_resume_emails = _extract_emails_from_text(candidate.get("resumeText", ""))
+    candidate_resume_phones = _extract_phones_from_text(candidate.get("resumeText", ""))
+
+    candidate_emails = [candidate.get("email", "")] + candidate_resume_emails
+    candidate_phones = [candidate.get("phone", "")] + candidate_resume_phones
 
     for record in existing_records:
-        result = compute_duplicate_score(candidate, record)
-        if result["duplicate_score"] > best_score:
-            best_score = result["duplicate_score"]
-            best_match = result
+        record_resume_emails = _extract_emails_from_text(record.get("resumeText", ""))
+        record_resume_phones = _extract_phones_from_text(record.get("resumeText", ""))
+
+        existing_emails = [record.get("email", "")] + record_resume_emails
+        existing_phones = [record.get("phone", "")] + record_resume_phones
+
+        # Fuzzy compare emails
+        max_email_score = 0.0
+        for ce in candidate_emails:
+            for ee in existing_emails:
+                score = _email_score(ce, ee)
+                if score > max_email_score:
+                    max_email_score = score
+
+        # Fuzzy compare phones
+        max_phone_score = 0.0
+        for cp in candidate_phones:
+            for ep in existing_phones:
+                score = _phone_score(cp, ep)
+                if score > max_phone_score:
+                    max_phone_score = score
+
+        # Compare colleges
+        college_score = _college_score(candidate.get("college", ""), record.get("college", ""))
+
+        # Flag duplicate if contacts match fuzzy thresholds
+        is_email_dup = max_email_score >= 95
+        is_phone_dup = max_phone_score >= 95
+
+        is_email_suspicious = max_email_score >= 90 and college_score >= 80
+        is_phone_suspicious = max_phone_score >= 90 and college_score >= 80
+
+        record_score = 0.0
+        record_reasons = []
+
+        if is_email_dup or is_phone_dup:
+            record_score = max(max_email_score, max_phone_score)
+            if is_email_dup:
+                record_reasons.append(f"Email match ({max_email_score:.0f}%) found in profile or resume.")
+            if is_phone_dup:
+                record_reasons.append(f"Phone number match ({max_phone_score:.0f}%) found in profile or resume.")
+        elif is_email_suspicious or is_phone_suspicious:
+            record_score = max(max_email_score, max_phone_score)
+            if is_email_suspicious:
+                record_reasons.append(f"Fuzzy email match ({max_email_score:.0f}%) with candidate from same college '{record.get('college')}' ({college_score:.0f}% match).")
+            if is_phone_suspicious:
+                record_reasons.append(f"Fuzzy phone match ({max_phone_score:.0f}%) with candidate from same college '{record.get('college')}' ({college_score:.0f}% match).")
+
+        if record_score > best_score:
+            best_score = record_score
+            is_duplicate = True
+            reasons = record_reasons
+            matched_user_id = record.get("userId") or record.get("id")
+            best_match = {
+                "existing_id": record["id"],
+                "existing_name": record["name"],
+                "existing_email": record["email"],
+                "field_scores": {
+                    "email": round(max_email_score, 2),
+                    "phone": round(max_phone_score, 2),
+                    "college": round(college_score, 2),
+                },
+                "duplicate_score": round(record_score, 2),
+                "reasons": record_reasons
+            }
 
     status = classify_score(best_score)
-
     elapsed_ms = round((time.monotonic() - start) * 1000, 2)
 
     audit_entry = {
@@ -208,4 +359,8 @@ async def run_duplicate_check(candidate: dict, db) -> dict:
         "best_match": best_match,
         "checked_against": len(existing_records),
         "response_time_ms": elapsed_ms,
+        "isDuplicate": is_duplicate,
+        "confidence": round(best_score / 100.0, 2),
+        "matchedUserId": matched_user_id,
+        "reasons": reasons if reasons else ["Candidate profile and resume check completed. No suspicious duplicate contact matches found."]
     }

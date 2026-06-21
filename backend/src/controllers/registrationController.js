@@ -69,6 +69,7 @@ exports.registerForHackathon = async (req, res) => {
       skills: req.body.skills,
       experienceLevel: req.body.experienceLevel,
       resumeText,
+      hackathonId: hackathon._id.toString(),
     };
 
     let duplicateCheckResult = null;

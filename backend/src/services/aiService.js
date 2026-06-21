@@ -21,7 +21,9 @@ exports.checkDuplicate = async (userData, existingParticipants) => {
         email: userData.email || "",
         phone: userData.phone || "0000000000",
         college: userData.institution || "Unknown",
-        skills: Array.isArray(userData.skills) ? userData.skills : (typeof userData.skills === 'string' ? userData.skills.split(',') : [])
+        skills: Array.isArray(userData.skills) ? userData.skills : (typeof userData.skills === 'string' ? userData.skills.split(',') : []),
+        resumeText: userData.resumeText || "",
+        hackathonId: userData.hackathonId || ""
       };
       
       const response = await aiClient.post("/api/duplicate-check", payload);
