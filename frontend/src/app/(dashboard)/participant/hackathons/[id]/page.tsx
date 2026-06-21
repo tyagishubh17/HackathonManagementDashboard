@@ -220,46 +220,50 @@ export default function HackathonDetails() {
               <Target className="text-indigo-600" /> Problem Statements
             </h2>
             <div className="space-y-4">
-              {hackathon.problemStatements?.length > 0 ? (
-                hackathon.problemStatements.map((ps: any) => (
-                  <div key={ps.id} className="p-6 border rounded-xl hover:border-indigo-300 transition bg-white shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-bold text-xl text-gray-900">{ps.title}</h3>
-                      <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">{ps.category}</span>
-                    </div>
-                    
-                    {ps.isUpcoming ? (
-                      <div className="mt-4 p-6 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-center flex flex-col items-center justify-center">
-                        <Clock size={32} className="text-gray-400 mb-3" />
-                        <p className="text-gray-600 font-medium mb-3">This problem statement will be revealed in:</p>
-                        <CountdownTimer targetDate={ps.scheduledAt} />
+              {myReg?.status === "confirmed" ? (
+                hackathon.problemStatements?.length > 0 ? (
+                  hackathon.problemStatements.map((ps: any) => (
+                    <div key={ps.id} className="p-6 border rounded-xl hover:border-indigo-300 transition bg-white shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-bold text-xl text-gray-900">{ps.title}</h3>
+                        <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">{ps.category}</span>
                       </div>
-                    ) : (
-                      <>
-                        <p className="text-gray-700 mt-3 whitespace-pre-wrap">{ps.description}</p>
-                        {ps.referenceFile && (
-                          <div className="mt-4 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <FileText className="text-indigo-600" size={24} />
-                              <div>
-                                <p className="font-bold text-sm text-gray-900">{ps.referenceFile.fileName}</p>
-                                <p className="text-xs text-gray-500">Resource File</p>
+                      
+                      {ps.isUpcoming ? (
+                        <div className="mt-4 p-6 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-center flex flex-col items-center justify-center">
+                          <Clock size={32} className="text-gray-400 mb-3" />
+                          <p className="text-gray-600 font-medium mb-3">This problem statement will be revealed in:</p>
+                          <CountdownTimer targetDate={ps.scheduledAt} />
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-gray-700 mt-3 whitespace-pre-wrap">{ps.description}</p>
+                          {ps.referenceFile && (
+                            <div className="mt-4 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <FileText className="text-indigo-600" size={24} />
+                                <div>
+                                  <p className="font-bold text-sm text-gray-900">{ps.referenceFile.fileName}</p>
+                                  <p className="text-xs text-gray-500">Resource File</p>
+                                </div>
                               </div>
+                              <a 
+                                href={`${api.defaults.baseURL}/hackathons/${id}/problem-statements/${ps.id}/download`} 
+                                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700"
+                              >
+                                Download
+                              </a>
                             </div>
-                            <a 
-                              href={`${api.defaults.baseURL}/hackathons/${id}/problem-statements/${ps.id}/download`} 
-                              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700"
-                            >
-                              Download
-                            </a>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 italic p-4 text-center bg-gray-50 rounded-xl">Problem statements will be revealed closer to the event.</p>
+                )
               ) : (
-                <p className="text-gray-500 italic p-4 text-center bg-gray-50 rounded-xl">Problem statements will be revealed closer to the event.</p>
+                <p className="text-gray-500 italic p-4 text-center bg-gray-50 rounded-xl">Register successfully and get your registration confirmed to view problem statements.</p>
               )}
             </div>
           </div>
@@ -294,7 +298,7 @@ export default function HackathonDetails() {
         </div>
 
         <div className="space-y-6">
-          {hackathon.announcements && hackathon.announcements.length > 0 && (
+          {myReg?.status === "confirmed" && hackathon.announcements && hackathon.announcements.length > 0 && (
             <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 shadow-sm">
               <h3 className="font-bold text-amber-900 mb-4 flex items-center gap-2">
                 <Megaphone className="text-amber-600" size={20} /> Noticeboard

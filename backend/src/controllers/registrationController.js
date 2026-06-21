@@ -316,3 +316,43 @@ exports.downloadResumeFile = async (req, res) => {
     res.status(500).json({ message: "Failed to load resume" });
   }
 };
+
+exports.sendEmailToParticipants = async (req, res) => {
+  try {
+    const { registrationIds, subject, message } = req.body;
+    if (!registrationIds || !Array.isArray(registrationIds) || registrationIds.length === 0) {
+      return res.status(400).json({ message: "At least one registration ID is required" });
+    }
+    if (!subject || !message) {
+      return res.status(400).json({ message: "Subject and message are required" });
+    }
+
+    const registrations = await Registration.find({ 
+      _id: { $in: registrationIds },
+      hackathonId: req.params.id 
+    }).populate("userId", "email fullName");
+
+    const emails = registrations.map(reg => reg.userId.email).filter(e => e);
+
+    if (emails.length === 0) {
+      return res.status(400).json({ message: "No valid email addresses found for selected participants" });
+    }
+
+    // Send emails
+    for (const email of emails) {
+      await sendEmail({
+        email,
+        subject,
+        message,
+        // Since we don't have a specific template for custom messages right now, 
+        // we just use raw text, or if there's a generic template, we could use it.
+        // Let's rely on standard text/html if we want, but message is text.
+      });
+    }
+
+    res.status(200).json({ success: true, message: `Successfully sent email to ${emails.length} participants.` });
+  } catch (err) {
+    console.error("Send Email Error:", err);
+    res.status(500).json({ message: "Failed to send emails" });
+  }
+};
