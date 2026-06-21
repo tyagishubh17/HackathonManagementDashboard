@@ -13,7 +13,7 @@ from typing import Optional
 
 import numpy as np
 from rapidfuzz import fuzz
-from sklearn.metrics.pairwise import cosine_similarity
+# sklearn cosine_similarity import removed to resolve editor warnings
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,15 @@ def _college_score(a: str, b: str) -> float:
     return max(partial, token)
 
 
+def _np_cosine_similarity(a, b) -> float:
+    dot = np.dot(a, b)
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return float(dot / (norm_a * norm_b))
+
+
 def _skills_similarity(skills_a: list[str], skills_b: list[str]) -> float:
     if not skills_a or not skills_b:
         return 0.0
@@ -103,8 +112,8 @@ def _skills_similarity(skills_a: list[str], skills_b: list[str]) -> float:
     text_a = " ".join(skills_a)
     text_b = " ".join(skills_b)
     emb = model.encode([text_a, text_b])
-    sim = cosine_similarity([emb[0]], [emb[1]])[0][0]
-    return float(sim) * 100.0
+    sim = _np_cosine_similarity(emb[0], emb[1])
+    return sim * 100.0
 
 
 
