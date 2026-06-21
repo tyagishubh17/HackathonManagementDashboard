@@ -16,25 +16,24 @@ const {
 
 const router = express.Router({ mergeParams: true });
 
+// Apply authentication verification globally across all child endpoints
 router.use(authenticate);
 
-// --- JUDGE / PARTICIPANT ---
+// --- JUDGE / PARTICIPANT ENTRANCES ---
 router.get("/my-assignments", getMyAssignments);
 router.get("/:id", getEvaluation);
 router.post("/:id/score", scoreEvaluation);
 router.put("/:id/submit", submitEvaluation);
 router.post("/:id/ai-suggest", getAISuggestions);
+router.post("/:id/appeal", appealEvaluation); 
 
-router.post("/:id/appeal", appealEvaluation); // Participant
-router.put("/:id/appeal-review", requireOrganizer, reviewAppeal); // Organizer
-
-// --- ORGANIZER (Mounted on /api/hackathons/:id/reviewers & /results) ---
-// Note: We'll route these differently in hackathons.js, but exposing endpoints here for clean grouping
+// --- ORGANIZER RESTRICTED ENTRIES ---
+router.put("/:id/appeal-review", requireOrganizer, reviewAppeal); 
 router.post("/assign", requireOrganizer, assignReviewersAI);
 router.get("/assignments", requireOrganizer, getAssignments);
 router.post("/reassign", requireOrganizer, reassignReviewer);
 
-// Generic results
+// Split panel visibility shield results
 router.get("/results", getResults);
 
 module.exports = router;
