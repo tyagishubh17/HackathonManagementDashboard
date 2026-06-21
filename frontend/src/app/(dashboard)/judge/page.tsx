@@ -2,77 +2,204 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { ClipboardList, CheckCircle, Clock } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { BookOpen, Clock, AlertCircle, CheckCircle, Loader } from "lucide-react";
+import { useState } from "react";
 
-export default function JudgeDashboard() {
-  const { data: assignments, isLoading } = useQuery({
-    queryKey: ["myAssignments"],
-    queryFn: () => api.get("/evaluations/my-assignments").then((res: any) => res.data.data),
+export default function JudgeAssignmentsPage() {
+  const router = useRouter();
+  const [filter, setFilter] = useState<"all" | "draft" | "submitted">("all");
+
+  // Fetch judge's assignments
+  const { data: assignmentsResponse, isLoading } = useQuery({
+    queryKey: ["judgeAssignments"],
+    queryFn: () =>
+      api.get(`/evaluations/my-assignments`).then((res: any) => res.data),
   });
 
-  if (isLoading) return <div className="p-8 text-center animate-pulse">Loading assignments...</div>;
+  // Safe Extraction: Always guarantee we are interacting with an iterable array structure
+  const assignments = Array.isArray(assignmentsResponse?.data) 
+    ? assignmentsResponse.data 
+    : Array.isArray(assignmentsResponse) 
+      ? assignmentsResponse 
+      : [];
 
-  const pending = assignments?.filter((a: any) => a.status === 'draft').length || 0;
-  const completed = assignments?.filter((a: any) => a.status === 'completed').length || 0;
+  const filteredAssignments = assignments.filter((a: any) => {
+    if (!a) return false;
+    if (filter === "all") return true;
+    return a?.status === filter;
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-8 text-center">
+        <Loader className="animate-spin mx-auto text-indigo-600 mb-3" size={32} />
+        <p className="text-gray-600 font-semibold">Loading your assignments...</p>
+      </div>
+    );
+  }
+
+  const draftCount = assignments.filter((a: any) => a?.status === "draft").length;
+  const submittedCount = assignments.filter((a: any) => a?.status === "submitted").length;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-black text-gray-900">Judge Overview</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-gray-500">Total Assignments</p>
-            <p className="text-3xl font-black text-indigo-600 mt-1">{assignments?.length || 0}</p>
-          </div>
-          <div className="bg-indigo-50 p-4 rounded-xl text-indigo-600"><ClipboardList size={32}/></div>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="bg-white rounded-2xl border p-8 shadow-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <BookOpen className="text-indigo-600" size={32} />
+          <h1 className="text-3xl font-black text-gray-900">Your Assignments</h1>
         </div>
-        <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-gray-500">Pending</p>
-            <p className="text-3xl font-black text-yellow-600 mt-1">{pending}</p>
-          </div>
-          <div className="bg-yellow-50 p-4 rounded-xl text-yellow-600"><Clock size={32}/></div>
+        <p className="text-gray-600">Review and score projects assigned to you by the organizers.</p>
+      </div>
+
+      {/* Stats Counter Workspace */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border p-6 shadow-sm">
+          <p className="text-gray-600 text-sm font-semibold">Total Assignments</p>
+          <p className="text-3xl font-black text-indigo-600">{assignments.length}</p>
         </div>
-        <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-gray-500">Completed</p>
-            <p className="text-3xl font-black text-green-600 mt-1">{completed}</p>
-          </div>
-          <div className="bg-green-50 p-4 rounded-xl text-green-600"><CheckCircle size={32}/></div>
+        <div className="bg-yellow-50 rounded-2xl border border-yellow-200 p-6">
+          <p className="text-yellow-800 text-sm font-semibold">Pending (Draft)</p>
+          <p className="text-3xl font-black text-yellow-600">{draftCount}</p>
+        </div>
+        <div className="bg-green-50 rounded-2xl border border-green-200 p-6">
+          <p className="text-green-800 text-sm font-semibold">Completed</p>
+          <p className="text-3xl font-black text-green-600">{submittedCount}</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border shadow-sm p-6 mt-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Assignments</h2>
-        
-        {assignments?.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">You have no pending assignments.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {assignments?.slice(0, 5).map((assign: any) => (
-              <div key={assign._id} className="border rounded-xl p-4 flex justify-between items-center hover:shadow-md transition">
-                <div>
-                  <h3 className="font-bold text-lg text-gray-900">Project: {assign.projectId?.name || assign.projectId}</h3>
-                  <p className="text-sm text-gray-500">Hackathon: {assign.hackathonId?.title || assign.hackathonId}</p>
+      {/* Filter Tabs */}
+      <div className="flex gap-3 bg-white rounded-2xl border p-2 w-fit">
+        {(["all", "draft", "submitted"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setFilter(tab)}
+            className={`px-6 py-2 font-bold rounded-lg transition ${
+              filter === tab
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Assignments List */}
+      <div className="space-y-4">
+        {filteredAssignments.length > 0 ? (
+          filteredAssignments.map((assignment: any) => {
+            if (!assignment) return null;
+            
+            // 🌟 STRICT FIX: Verify assignment.projectId is a populated object, not a raw text ID
+            const projectData = assignment.projectId && typeof assignment.projectId === "object"
+              ? assignment.projectId
+              : { 
+                  title: "Project Pending Synchronization", 
+                  description: "Awaiting database synchronization parameters.", 
+                  techStack: [] 
+                };
+
+            return (
+              <div
+                key={assignment._id}
+                className="bg-white rounded-2xl border p-6 shadow-sm hover:shadow-md transition"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      {/* Explicitly mapping onto title text string property */}
+                      <h2 className="text-xl font-bold text-gray-900">
+                        {projectData.title || "Untitled Project"}
+                      </h2>
+                      <span
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
+                          assignment.status === "draft"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {assignment.status === "draft" ? (
+                          <>
+                            <Clock size={14} /> Draft
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle size={14} /> Submitted
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Explicitly mapping description text substring */}
+                    <p className="text-gray-600 text-sm mb-3">
+                      {projectData.description 
+                        ? `${projectData.description.substring(0, 120)}...` 
+                        : "No description log summary added."}
+                    </p>
+
+                    {/* Explicitly mapping techStack array lists */}
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {projectData.techStack?.slice(0, 4).map((tech: string) => (
+                        <span
+                          key={tech}
+                          className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs font-semibold"
+                        >
+                          {tech}
+                        </span>
+                      ))}
+                      {projectData.techStack?.length > 4 && (
+                        <span className="text-gray-600 text-xs px-2 py-1">
+                          +{projectData.techStack.length - 4} more
+                        </span>
+                      )}
+                    </div>
+
+                    {assignment.totalScore > 0 && (
+                      <div className="flex items-center gap-6 mt-2">
+                        <div>
+                          <p className="text-xs text-gray-600 font-semibold">Your Score</p>
+                          <p className="text-2xl font-black text-indigo-600">{assignment.totalScore}/100</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      assignment.status === "draft"
+                        ? router.push(`/judge/assignments/${assignment._id}/score`)
+                        : router.push(`/judge/assignments/${assignment._id}`)
+                    }
+                    className={`px-6 py-3 font-bold rounded-lg transition whitespace-nowrap h-fit ${
+                      assignment.status === "draft"
+                        ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    {assignment.status === "draft" ? "Score Now" : "View"}
+                  </button>
                 </div>
-                <div>
-                  {assign.status === 'completed' ? (
-                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-bold">Completed</span>
-                  ) : (
-                    <Link 
-                      href={`/judge/assignments/${assign._id}`}
-                      className="bg-indigo-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-indigo-700 transition shadow-sm"
-                    >
-                      Evaluate
-                    </Link>
-                  )}
-                </div>
+
+                {assignment.biasFlags && assignment.biasFlags.length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-start gap-2 text-orange-700 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                      <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+                      <p className="text-sm font-semibold">
+                        ⚠️ Bias Alert: {assignment.biasFlags.join(", ")}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
+            );
+          })
+        ) : (
+          <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed">
+            <AlertCircle className="mx-auto text-gray-400 mb-3" size={48} />
+            <p className="text-gray-600 font-semibold">No assignments to display</p>
+            <p className="text-gray-500 text-sm mt-1">Check back later for new assigned projects.</p>
           </div>
         )}
       </div>
