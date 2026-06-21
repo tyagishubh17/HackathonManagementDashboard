@@ -84,18 +84,34 @@ exports.registerForHackathon = async (req, res) => {
         const aiResult = await checkDuplicate(userData, existingParticipants);
         
         if (aiResult) {
+          const confidence = (aiResult.duplicate_score || 0) / 100;
+          const isDuplicate = aiResult.status === "Exact Duplicate" || aiResult.status === "Suspicious";
+          const matchedUserId = aiResult.best_match && mongoose.Types.ObjectId.isValid(aiResult.best_match.existing_id)
+            ? new mongoose.Types.ObjectId(aiResult.best_match.existing_id)
+            : undefined;
+          const matchedUserName = aiResult.best_match ? aiResult.best_match.existing_name : undefined;
+          
+          let reasons = [];
+          if (aiResult.best_match && aiResult.best_match.matching_fields) {
+            reasons = aiResult.best_match.matching_fields.map(field => {
+              const score = aiResult.best_match.field_scores?.[field];
+              return score ? `Matched ${field} with ${score.toFixed(0)}% similarity` : `Matched ${field}`;
+            });
+          }
+
           duplicateCheckResult = {
-            isDuplicate: aiResult.isDuplicate,
-            confidence: aiResult.confidence,
-            matchedUserId: aiResult.matchedUserId,
-            reasons: aiResult.reasons,
+            isDuplicate,
+            confidence,
+            matchedUserId,
+            matchedUserName,
+            reasons,
             checkedAt: new Date(),
           };
 
-          if (aiResult.confidence >= 0.90) {
+          if (confidence >= 0.90) {
             status = "rejected";
             message = "Registration rejected due to high duplicate probability.";
-          } else if (aiResult.confidence >= 0.70) {
+          } else if (confidence >= 0.70) {
             status = "pending_review";
             message = "Registration pending manual review.";
           }

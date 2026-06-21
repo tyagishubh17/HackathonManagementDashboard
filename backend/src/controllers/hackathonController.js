@@ -128,13 +128,9 @@ exports.updateHackathon = async (req, res) => {
       return res.status(400).json({ message: "Cannot update settings while event is ongoing" });
     }
 
-    // Require editReason if verified and updated by organizer
+    // Auto-flag for admin review when a verified hackathon is updated by organizer
     if (isOrganizer && hackathon.verificationStatus === "verified") {
-      if (!req.body.editReason || req.body.editReason.trim() === "") {
-        return res.status(400).json({ message: "An edit reason is required for verified hackathons" });
-      }
       hackathon.hasUnreviewedEdits = true;
-      hackathon.editReason = req.body.editReason;
     }
 
     if (req.body.timeline) {
@@ -145,9 +141,7 @@ exports.updateHackathon = async (req, res) => {
     // Don't accidentally overwrite verification flags if passed by malicious payload
     delete req.body.verificationStatus;
     delete req.body.hasUnreviewedEdits;
-    if (!isOrganizer || hackathon.verificationStatus !== "verified") {
-        delete req.body.editReason;
-    }
+    delete req.body.editReason;
 
     Object.assign(hackathon, req.body);
     await hackathon.save();
@@ -209,6 +203,7 @@ exports.publishHackathon = async (req, res) => {
 
     hackathon.verificationStatus = "pending"; // Represents 'pending_verification' workflow
     hackathon.publishedAt = new Date();
+    hackathon.organizerFeedback = req.body.organizerFeedback || null;
     await hackathon.save();
 
     // Email Super Admin (find any super admin)

@@ -94,6 +94,7 @@ const hackathonSchema = new mongoose.Schema(
     cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     hasUnreviewedEdits: { type: Boolean, default: false },
     editReason: { type: String, default: null },
+    organizerFeedback: { type: String, default: null },
   },
   { timestamps: true }
 );
