@@ -28,12 +28,14 @@ ENV/
 pip-log.txt
 pip-delete-this-directory.txt
 .pytest_cache/
+*.egg-info/
 
 # Environment Variables (Keep Secrets Safe!)
 .env
 .env.*
 !.env.example
 !.env.template
+.env.local
 
 # Logs
 logs/
@@ -42,5 +44,9 @@ logs/
 # Docker
 .docker/
 
-# GCP Credentials
+# GCP / Service Account Credentials
 *service-account.json
+credentials.json
+
+# Uploaded resumes and local file storage
+uploads/

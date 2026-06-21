@@ -54,6 +54,12 @@ export default function HackathonDetails() {
     queryFn: () => api.get(`/hackathons/${id}/my-registration`).then((res: any) => res.data.data).catch(() => null),
   });
 
+  const { data: hackathonTeams } = useQuery({
+    queryKey: ["hackathonTeams", id],
+    queryFn: () => api.get(`/hackathons/${id}/teams`).then((res: any) => res.data.data).catch(() => []),
+    enabled: !!myReg,
+  });
+
   const ackMutation = useMutation({
     mutationFn: () => api.post(`/hackathons/${id}/registrations/my-registration/acknowledge-update`),
     onSuccess: () => {
@@ -135,12 +141,30 @@ export default function HackathonDetails() {
 
           <div className="w-full md:w-80 bg-white p-6 rounded-2xl shadow-lg border">
             {myReg ? (
-              <div className={`p-4 rounded-xl text-center font-bold border ${
-                myReg.status === "confirmed" ? "bg-green-50 text-green-700 border-green-200" :
-                myReg.status === "pending_review" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
-                "bg-red-50 text-red-700 border-red-200"
-              }`}>
-                Registration Status: {myReg.status.toUpperCase()}
+              <div className="space-y-4">
+                <div className={`p-4 rounded-xl text-center font-bold border ${
+                  myReg.status === "confirmed" ? "bg-green-50 text-green-700 border-green-200" :
+                  myReg.status === "pending_review" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
+                  "bg-red-50 text-red-700 border-red-200"
+                }`}>
+                  Registration Status: {myReg.status.toUpperCase()}
+                </div>
+                {myReg.teamId && (
+                  <div className="p-4 border rounded-xl bg-indigo-50/50 border-indigo-100 space-y-3 text-left">
+                    <div className="flex items-center gap-2 text-indigo-900 font-bold">
+                      <Users size={18} />
+                      <span>{myReg.teamId.name}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {myReg.teamId.members?.map((m: any) => (
+                        <div key={m._id} className="flex items-center gap-2 text-xs bg-white border p-2 rounded">
+                          <div className="w-5 h-5 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-[10px]">{m.fullName?.charAt(0)}</div>
+                          <span className="truncate text-gray-700 font-medium">{m.fullName} {m._id === myReg.userId ? "(You)" : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <form onSubmit={handleRegister} className="space-y-4">
@@ -239,6 +263,34 @@ export default function HackathonDetails() {
               )}
             </div>
           </div>
+
+          {/* Teams list */}
+          {myReg && hackathonTeams && hackathonTeams.length > 0 && (
+            <div className="bg-white rounded-2xl border p-8 shadow-sm">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Users className="text-indigo-600" /> Teams in this Hackathon ({hackathonTeams.length})
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {hackathonTeams.map((team: any) => {
+                  const isMyTeam = myReg.teamId && myReg.teamId._id === team._id;
+                  return (
+                    <div key={team._id} className={`p-5 border rounded-xl relative overflow-hidden bg-gray-50 hover:shadow-sm transition ${isMyTeam ? 'border-indigo-500 ring-2 ring-indigo-500/20' : ''}`}>
+                      {isMyTeam && <span className="absolute top-0 right-0 bg-indigo-600 text-white px-2 py-0.5 text-[10px] font-bold rounded-bl-lg uppercase">My Team</span>}
+                      <h4 className="font-bold text-lg text-gray-900 truncate mb-3">{team.name}</h4>
+                      <div className="space-y-1.5">
+                        {team.members?.map((m: any) => (
+                          <div key={m._id} className="flex items-center gap-2 text-xs bg-white border px-2 py-1 rounded">
+                            <span className="w-5 h-5 bg-indigo-50 text-indigo-700 rounded-full flex items-center justify-center font-bold text-[10px]">{m.fullName?.charAt(0)}</span>
+                            <span className="truncate text-gray-700 font-medium">{m.fullName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">

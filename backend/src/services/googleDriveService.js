@@ -27,15 +27,43 @@ try {
   console.warn("Failed to initialize Google Drive. Falling back to local storage:", err.message);
 }
 
-exports.uploadFile = async (fileBuffer, fileName, mimeType) => {
+exports.uploadFile = async (fileBuffer, fileName, mimeType, folderName = null) => {
   if (drive) {
     try {
       const bufferStream = new stream.PassThrough();
       bufferStream.end(fileBuffer);
 
+      let parentId = FOLDER_ID;
+
+      if (folderName) {
+        try {
+          const sanitizedFolderName = folderName.replace(/['"\\/]/g, '').trim();
+          const q = `mimeType='application/vnd.google-apps.folder' and name='${sanitizedFolderName.replace(/'/g, "\\'")}' and '${FOLDER_ID}' in parents and trashed=false`;
+          const listRes = await drive.files.list({ q, fields: "files(id, name)" });
+          
+          if (listRes.data.files && listRes.data.files.length > 0) {
+            parentId = listRes.data.files[0].id;
+          } else {
+            const folderMetadata = {
+              name: sanitizedFolderName,
+              mimeType: "application/vnd.google-apps.folder",
+              parents: [FOLDER_ID],
+            };
+            const folder = await drive.files.create({
+              resource: folderMetadata,
+              fields: "id",
+            });
+            parentId = folder.data.id;
+          }
+        } catch (folderErr) {
+          console.warn("Failed to find or create Google Drive subfolder, falling back to parent folder:", folderErr.message);
+          parentId = FOLDER_ID;
+        }
+      }
+
       const fileMetadata = {
         name: fileName,
-        parents: [FOLDER_ID],
+        parents: [parentId],
       };
       
       const media = {
@@ -75,14 +103,29 @@ exports.uploadFile = async (fileBuffer, fileName, mimeType) => {
   }
 
   // Local fallback
-  const uniqueName = `${Date.now()}-${fileName}`;
-  const localPath = path.join(fallbackDir, uniqueName);
+  let localSubDir = fallbackDir;
+  let relativePathPrefix = "/uploads";
+  let finalFileId = "";
+
+  if (folderName) {
+    const sanitizedFolder = folderName.replace(/[^a-zA-Z0-9-_]/g, "_");
+    localSubDir = path.join(fallbackDir, sanitizedFolder);
+    if (!fs.existsSync(localSubDir)) {
+      fs.mkdirSync(localSubDir, { recursive: true });
+    }
+    relativePathPrefix = `/uploads/${sanitizedFolder}`;
+    finalFileId = `${sanitizedFolder}/${Date.now()}-${fileName}`;
+  } else {
+    finalFileId = `${Date.now()}-${fileName}`;
+  }
+
+  const localPath = path.join(fallbackDir, finalFileId);
   fs.writeFileSync(localPath, fileBuffer);
   
   return {
-    fileId: uniqueName,
-    webViewLink: `/uploads/${uniqueName}`,
-    webContentLink: `/uploads/${uniqueName}`,
+    fileId: finalFileId,
+    webViewLink: `${relativePathPrefix}/${path.basename(finalFileId)}`,
+    webContentLink: `${relativePathPrefix}/${path.basename(finalFileId)}`,
     isLocal: true,
   };
 };

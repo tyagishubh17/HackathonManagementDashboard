@@ -48,7 +48,7 @@ exports.registerForHackathon = async (req, res) => {
       }
 
       resumeText = await extractTextFromResume(req.file.buffer, req.file.mimetype);
-      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
+      const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype, hackathon.title);
       
       resumeData = {
         driveFileId: uploaded.fileId,
@@ -134,7 +134,10 @@ exports.getMyRegistration = async (req, res) => {
   try {
     const reg = await Registration.findOne({ hackathonId: req.params.id, userId: req.user._id })
       .populate("hackathonId", "title timeline config")
-      .populate("teamId");
+      .populate({
+        path: "teamId",
+        populate: { path: "members", select: "fullName email" }
+      });
     
     if (!reg) return res.status(404).json({ message: "Registration not found" });
     res.status(200).json({ success: true, data: reg });

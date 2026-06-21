@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { TeamFormationReview } from "./TeamFormationReview";
 
 export const TeamManager = ({ hackathonId }: { hackathonId: string }) => {
   const [teams, setTeams] = useState<any[]>([]);
@@ -33,10 +34,13 @@ export const TeamManager = ({ hackathonId }: { hackathonId: string }) => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow border p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Manage Teams ({teams.length})</h2>
-      </div>
+    <div className="space-y-6">
+      <TeamFormationReview hackathonId={hackathonId} onRefresh={fetchTeams} />
+
+      <div className="bg-white rounded-xl shadow border p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">Manage Teams ({teams.length})</h2>
+        </div>
 
       {loading ? (
         <p className="text-gray-500 text-center">Loading teams...</p>
@@ -70,6 +74,7 @@ export const TeamManager = ({ hackathonId }: { hackathonId: string }) => {
           {teams.length === 0 && <p className="col-span-full text-center text-gray-500">No teams formed yet.</p>}
         </div>
       )}
+      </div>
     </div>
   );
 };

@@ -22,10 +22,47 @@ exports.formTeamsAI = async (req, res) => {
 
     const aiSuggestedTeams = await formTeams(participants, hackathon.config);
 
+    const savedTeams = [];
+    const previewTeams = [];
+
+    for (let i = 0; i < aiSuggestedTeams.length; i++) {
+      const suggestedTeam = aiSuggestedTeams[i];
+      const memberUserIds = suggestedTeam.members.map(m => m.user_id).filter(Boolean);
+      const memberRegIds = suggestedTeam.members.map(m => m.registration_id).filter(Boolean);
+
+      if (memberUserIds.length === 0) continue;
+
+      const teamName = `Team ${i + 1}`;
+
+      // Create the Team document
+      const newTeam = await Team.create({
+        hackathonId: hackathon._id,
+        name: teamName,
+        members: memberUserIds,
+      });
+
+      // Update the registrations of the members to reference this team
+      await Registration.updateMany(
+        { _id: { $in: memberRegIds } },
+        { $set: { teamId: newTeam._id } }
+      );
+
+      savedTeams.push(newTeam);
+
+      // Format suggestions to match the frontend expectations
+      previewTeams.push({
+        name: teamName,
+        members: suggestedTeam.members.map(m => ({
+          fullName: m.name,
+          skills: m.skills || []
+        }))
+      });
+    }
+
     res.status(200).json({ 
       success: true, 
-      message: "AI team formation generated. Please review.", 
-      data: aiSuggestedTeams 
+      message: `${savedTeams.length} teams successfully formed and saved.`, 
+      data: previewTeams 
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

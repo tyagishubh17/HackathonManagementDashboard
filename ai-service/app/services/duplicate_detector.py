@@ -13,19 +13,27 @@ from typing import Optional
 
 import numpy as np
 from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger(__name__)
 
-_model: Optional[SentenceTransformer] = None
+_model = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model():
     global _model
     if _model is None:
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
+        try:
+            from sentence_transformers import SentenceTransformer
+            _model = SentenceTransformer("all-MiniLM-L6-v2")
+        except ImportError:
+            logger.warning(
+                "sentence_transformers not installed — skills similarity will be skipped. "
+                "Run: pip install sentence-transformers"
+            )
+            _model = None
     return _model
+
 
 
 def _normalize_phone(phone: str) -> str:
@@ -90,11 +98,14 @@ def _skills_similarity(skills_a: list[str], skills_b: list[str]) -> float:
     if not skills_a or not skills_b:
         return 0.0
     model = get_embedding_model()
+    if model is None:
+        return 0.0  # sentence_transformers not yet installed
     text_a = " ".join(skills_a)
     text_b = " ".join(skills_b)
     emb = model.encode([text_a, text_b])
     sim = cosine_similarity([emb[0]], [emb[1]])[0][0]
     return float(sim) * 100.0
+
 
 
 def compute_duplicate_score(candidate: dict, existing: dict) -> dict:

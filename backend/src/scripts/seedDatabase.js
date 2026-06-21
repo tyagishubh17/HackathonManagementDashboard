@@ -133,16 +133,28 @@ const seedDatabase = async () => {
     });
     console.log("Created 2 hackathons (1 upcoming, 1 ongoing).");
 
-    // 6. Create Registrations for Ongoing Hackathon
+    // 6. Create Registrations for BOTH Hackathons
+    // Upcoming hackathon (organizer1) — no teams yet, perfect for AI team formation demo
     for (const participant of participants) {
       await Registration.create({
-        hackathonId: ongoingHackathon._id,
+        hackathonId: upcomingHackathon._id,
         userId: participant._id,
         status: "confirmed",
       });
     }
 
-    // 7. Form Teams for Ongoing Hackathon
+    // Ongoing hackathon (organizer2) — all participants registered + confirmed
+    const ongoingRegs = [];
+    for (const participant of participants) {
+      const reg = await Registration.create({
+        hackathonId: ongoingHackathon._id,
+        userId: participant._id,
+        status: "confirmed",
+      });
+      ongoingRegs.push(reg);
+    }
+
+    // 7. Form Teams for Ongoing Hackathon and link teamId on Registration docs
     const teams = [];
     for (let i = 0; i < 5; i++) { // 5 teams of 4 members
       const teamMembers = participants.slice(i * 4, i * 4 + 4).map(p => p._id);
@@ -153,6 +165,15 @@ const seedDatabase = async () => {
         problemStatementId: ongoingHackathon.problemStatements[0]._id,
       });
       teams.push(team);
+
+      // Link teamId on each Registration so the $exists query works correctly
+      const memberRegIds = ongoingRegs
+        .filter(r => teamMembers.some(uid => uid.equals(r.userId)))
+        .map(r => r._id);
+      await Registration.updateMany(
+        { _id: { $in: memberRegIds } },
+        { $set: { teamId: team._id } }
+      );
     }
     console.log(`Created ${teams.length} teams.`);
 

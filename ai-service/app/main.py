@@ -26,6 +26,7 @@ from app.services.duplicate_detector import run_duplicate_check
 from app.services.bias_detector import run_bias_detection
 from app.services.review_agent import run_review_agent
 from app.services.reviewer_assignment import assign_reviewers
+from app.services.team_builder import form_teams
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -101,6 +102,11 @@ class ReviewerAssignRequest(BaseModel):
     max_reviews_per_reviewer: int = Field(default=2, ge=1, le=10)
 
 
+class TeamFormRequest(BaseModel):
+    participants: list[dict] = Field(..., min_items=1)
+    config: dict = Field(default_factory=dict)
+
+
 # ─── Health Check ─────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -166,6 +172,19 @@ async def reviewer_assign(payload: ReviewerAssignRequest):
         return result
     except Exception as exc:
         logger.exception("Reviewer assignment failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/team-form")
+async def team_form(payload: TeamFormRequest):
+    """
+    Form skill-balanced teams from candidates and hackathon configuration.
+    """
+    try:
+        result = form_teams(payload.participants, payload.config)
+        return result
+    except Exception as exc:
+        logger.exception("Team formation failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
