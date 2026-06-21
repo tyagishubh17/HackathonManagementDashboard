@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Calendar, Users, Target, ShieldCheck, FileText, Clock, Megaphone } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -39,6 +39,7 @@ const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
 
 export default function HackathonDetails() {
   const { id } = useParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [registering, setRegistering] = useState(false);
   const [resume, setResume] = useState<File | null>(null);
@@ -52,12 +53,6 @@ export default function HackathonDetails() {
   const { data: myReg, refetch: refetchReg } = useQuery({
     queryKey: ["myRegistration", id],
     queryFn: () => api.get(`/hackathons/${id}/my-registration`).then((res: any) => res.data.data).catch(() => null),
-  });
-
-  const { data: hackathonTeams } = useQuery({
-    queryKey: ["hackathonTeams", id],
-    queryFn: () => api.get(`/hackathons/${id}/teams`).then((res: any) => res.data.data).catch(() => []),
-    enabled: !!myReg,
   });
 
   const ackMutation = useMutation({
@@ -142,6 +137,7 @@ export default function HackathonDetails() {
           <div className="w-full md:w-80 bg-white p-6 rounded-2xl shadow-lg border">
             {myReg ? (
               <div className="space-y-4">
+                {/* Registration Status Badge */}
                 <div className={`p-4 rounded-xl text-center font-bold border ${
                   myReg.status === "confirmed" ? "bg-green-50 text-green-700 border-green-200" :
                   myReg.status === "pending_review" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
@@ -149,20 +145,30 @@ export default function HackathonDetails() {
                 }`}>
                   Registration Status: {myReg.status.toUpperCase()}
                 </div>
-                {myReg.teamId && (
-                  <div className="p-4 border rounded-xl bg-indigo-50/50 border-indigo-100 space-y-3 text-left">
-                    <div className="flex items-center gap-2 text-indigo-900 font-bold">
-                      <Users size={18} />
-                      <span>{myReg.teamId.name}</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {myReg.teamId.members?.map((m: any) => (
-                        <div key={m._id} className="flex items-center gap-2 text-xs bg-white border p-2 rounded">
-                          <div className="w-5 h-5 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-[10px]">{m.fullName?.charAt(0)}</div>
-                          <span className="truncate text-gray-700 font-medium">{m.fullName} {m._id === myReg.userId ? "(You)" : ""}</span>
+
+                {/* Conditional Submission Handling Following Team Assembly Verification */}
+                {myReg.status === "confirmed" && (
+                  <div className="pt-2 border-t border-gray-100">
+                    {myReg.teamId ? (
+                      <div className="space-y-2">
+                        <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-center">
+                          <p className="text-xs text-indigo-700 font-bold">✓ Team Formed Successfully</p>
                         </div>
-                      ))}
-                    </div>
+                        <button
+                          onClick={() => router.push(`/participant/projects/${id}`)}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-4 rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-indigo-100"
+                        >
+                          <Target size={18} /> Manage & Submit Project
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-1">
+                        <p className="text-xs font-black text-amber-800">⏳ Awaiting Team Formation</p>
+                        <p className="text-[11px] text-amber-700 leading-relaxed">
+                          Submissions open up automatically as soon as organizing teams run the cluster formation routines.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -263,34 +269,6 @@ export default function HackathonDetails() {
               )}
             </div>
           </div>
-
-          {/* Teams list */}
-          {myReg && hackathonTeams && hackathonTeams.length > 0 && (
-            <div className="bg-white rounded-2xl border p-8 shadow-sm">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Users className="text-indigo-600" /> Teams in this Hackathon ({hackathonTeams.length})
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {hackathonTeams.map((team: any) => {
-                  const isMyTeam = myReg.teamId && myReg.teamId._id === team._id;
-                  return (
-                    <div key={team._id} className={`p-5 border rounded-xl relative overflow-hidden bg-gray-50 hover:shadow-sm transition ${isMyTeam ? 'border-indigo-500 ring-2 ring-indigo-500/20' : ''}`}>
-                      {isMyTeam && <span className="absolute top-0 right-0 bg-indigo-600 text-white px-2 py-0.5 text-[10px] font-bold rounded-bl-lg uppercase">My Team</span>}
-                      <h4 className="font-bold text-lg text-gray-900 truncate mb-3">{team.name}</h4>
-                      <div className="space-y-1.5">
-                        {team.members?.map((m: any) => (
-                          <div key={m._id} className="flex items-center gap-2 text-xs bg-white border px-2 py-1 rounded">
-                            <span className="w-5 h-5 bg-indigo-50 text-indigo-700 rounded-full flex items-center justify-center font-bold text-[10px]">{m.fullName?.charAt(0)}</span>
-                            <span className="truncate text-gray-700 font-medium">{m.fullName}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="space-y-6">
