@@ -84,18 +84,34 @@ exports.registerForHackathon = async (req, res) => {
         const aiResult = await checkDuplicate(userData, existingParticipants);
         
         if (aiResult) {
+          const confidence = (aiResult.duplicate_score || 0) / 100;
+          const isDuplicate = aiResult.status === "Exact Duplicate" || aiResult.status === "Suspicious";
+          const matchedUserId = aiResult.best_match && mongoose.Types.ObjectId.isValid(aiResult.best_match.existing_id)
+            ? new mongoose.Types.ObjectId(aiResult.best_match.existing_id)
+            : undefined;
+          const matchedUserName = aiResult.best_match ? aiResult.best_match.existing_name : undefined;
+          
+          let reasons = [];
+          if (aiResult.best_match && aiResult.best_match.matching_fields) {
+            reasons = aiResult.best_match.matching_fields.map(field => {
+              const score = aiResult.best_match.field_scores?.[field];
+              return score ? `Matched ${field} with ${score.toFixed(0)}% similarity` : `Matched ${field}`;
+            });
+          }
+
           duplicateCheckResult = {
-            isDuplicate: aiResult.isDuplicate,
-            confidence: aiResult.confidence,
-            matchedUserId: aiResult.matchedUserId,
-            reasons: aiResult.reasons,
+            isDuplicate,
+            confidence,
+            matchedUserId,
+            matchedUserName,
+            reasons,
             checkedAt: new Date(),
           };
 
-          if (aiResult.confidence >= 0.90) {
+          if (confidence >= 0.90) {
             status = "rejected";
             message = "Registration rejected due to high duplicate probability.";
-          } else if (aiResult.confidence >= 0.70) {
+          } else if (confidence >= 0.70) {
             status = "pending_review";
             message = "Registration pending manual review.";
           }
@@ -314,5 +330,45 @@ exports.downloadResumeFile = async (req, res) => {
   } catch (err) {
     console.error("Resume proxy error:", err);
     res.status(500).json({ message: "Failed to load resume" });
+  }
+};
+
+exports.sendEmailToParticipants = async (req, res) => {
+  try {
+    const { registrationIds, subject, message } = req.body;
+    if (!registrationIds || !Array.isArray(registrationIds) || registrationIds.length === 0) {
+      return res.status(400).json({ message: "At least one registration ID is required" });
+    }
+    if (!subject || !message) {
+      return res.status(400).json({ message: "Subject and message are required" });
+    }
+
+    const registrations = await Registration.find({ 
+      _id: { $in: registrationIds },
+      hackathonId: req.params.id 
+    }).populate("userId", "email fullName");
+
+    const emails = registrations.map(reg => reg.userId.email).filter(e => e);
+
+    if (emails.length === 0) {
+      return res.status(400).json({ message: "No valid email addresses found for selected participants" });
+    }
+
+    // Send emails
+    for (const email of emails) {
+      await sendEmail({
+        email,
+        subject,
+        message,
+        // Since we don't have a specific template for custom messages right now, 
+        // we just use raw text, or if there's a generic template, we could use it.
+        // Let's rely on standard text/html if we want, but message is text.
+      });
+    }
+
+    res.status(200).json({ success: true, message: `Successfully sent email to ${emails.length} participants.` });
+  } catch (err) {
+    console.error("Send Email Error:", err);
+    res.status(500).json({ message: "Failed to send emails" });
   }
 };

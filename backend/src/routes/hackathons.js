@@ -46,6 +46,10 @@ router.get("/:id/reviewers/assignments", requireOrganizer, getAssignments);
 router.post("/:id/reviewers/reassign", requireOrganizer, reassignReviewer);
 router.get("/:id/results", getResults);
 
+const { publishResults, getHackathonCertificates } = require("../controllers/certificateController");
+router.post("/:id/publish-results", requireOrganizer, publishResults);
+router.get("/:id/certificates", requireOrganizer, getHackathonCertificates);
+
 // Organizer Routes (Requires Auth & Organizer Role)
 // We apply authenticate to all below.
 router.use(authenticate);

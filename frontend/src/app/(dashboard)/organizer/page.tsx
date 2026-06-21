@@ -1,15 +1,31 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Calendar, Users, Target, PlusCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 export default function OrganizerDashboard() {
-  const { data: hackathons, isLoading } = useQuery({
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+
+  const { data: hackathons, isLoading, refetch } = useQuery({
     queryKey: ["myHackathons"],
     queryFn: () => api.get("/hackathons/my-hackathons").then((res: any) => res.data.data),
   });
+
+  const handlePublish = async (id: string) => {
+    setPublishingId(id);
+    try {
+      await api.post(`/hackathons/${id}/publish`);
+      alert("Hackathon submitted for verification successfully!");
+      refetch();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to publish hackathon. Make sure all settings and at least one problem statement are added.");
+    } finally {
+      setPublishingId(null);
+    }
+  };
 
   if (isLoading) return <div className="p-8 text-center animate-pulse">Loading dashboard...</div>;
 
@@ -79,7 +95,14 @@ export default function OrganizerDashboard() {
               <tbody className="divide-y">
                 {hackathons?.slice(0, 5).map((hack: any) => (
                   <tr key={hack._id} className="hover:bg-gray-50 transition">
-                    <td className="py-4 font-bold text-gray-900">{hack.title}</td>
+                    <td className="py-4 text-gray-900">
+                      <div className="font-bold">{hack.title}</div>
+                      {hack.verificationStatus === 'rejected' && hack.rejectionReason && (
+                        <div className="text-xs text-red-600 font-normal mt-1 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5 max-w-md">
+                          <strong>Feedback:</strong> {hack.rejectionReason}
+                        </div>
+                      )}
+                    </td>
                     <td className="py-4">
                       <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold uppercase">
                         {hack.status.replace("_", " ")}
@@ -94,10 +117,19 @@ export default function OrganizerDashboard() {
                         {hack.verificationStatus.replace("_", " ")}
                       </span>
                     </td>
-                    <td className="py-4">
-                      <Link href={`/organizer/hackathons/${hack._id}`} className="text-indigo-600 font-bold hover:underline text-sm">
+                    <td className="py-4 flex gap-2 items-center">
+                      <Link href={`/organizer/hackathons/${hack._id}`} className="text-indigo-600 font-bold hover:underline text-sm border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition">
                         Manage
                       </Link>
+                      {(hack.status === "draft" || hack.verificationStatus === "rejected") && (
+                        <button
+                          onClick={() => handlePublish(hack._id)}
+                          disabled={publishingId === hack._id}
+                          className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition animate-in fade-in"
+                        >
+                          {publishingId === hack._id ? "Publishing..." : "Publish"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

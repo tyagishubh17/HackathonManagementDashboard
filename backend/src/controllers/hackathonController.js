@@ -24,7 +24,7 @@ const validateTimeline = (timeline) => {
 exports.createHackathon = async (req, res) => {
   try {
     const { title, description, timeline, rubric, config, problemStatements } = req.body;
-    
+
     if (timeline) {
       const error = validateTimeline(timeline);
       if (error) return res.status(400).json({ message: error });
@@ -122,19 +122,15 @@ exports.updateHackathon = async (req, res) => {
     if (["completed", "cancelled"].includes(hackathon.status)) {
       return res.status(400).json({ message: "Cannot update a completed or cancelled hackathon" });
     }
-    
+
     // We allow ongoing/evaluating updates if it's just minor things, but let's keep the existing logic:
     if (hackathon.verificationStatus === "verified" && ["ongoing", "evaluating"].includes(hackathon.status)) {
       return res.status(400).json({ message: "Cannot update settings while event is ongoing" });
     }
 
-    // Require editReason if verified and updated by organizer
+    // Auto-flag for admin review when a verified hackathon is updated by organizer
     if (isOrganizer && hackathon.verificationStatus === "verified") {
-      if (!req.body.editReason || req.body.editReason.trim() === "") {
-        return res.status(400).json({ message: "An edit reason is required for verified hackathons" });
-      }
       hackathon.hasUnreviewedEdits = true;
-      hackathon.editReason = req.body.editReason;
     }
 
     if (req.body.timeline) {
@@ -145,9 +141,7 @@ exports.updateHackathon = async (req, res) => {
     // Don't accidentally overwrite verification flags if passed by malicious payload
     delete req.body.verificationStatus;
     delete req.body.hasUnreviewedEdits;
-    if (!isOrganizer || hackathon.verificationStatus !== "verified") {
-        delete req.body.editReason;
-    }
+    delete req.body.editReason;
 
     Object.assign(hackathon, req.body);
     await hackathon.save();
@@ -209,6 +203,7 @@ exports.publishHackathon = async (req, res) => {
 
     hackathon.verificationStatus = "pending"; // Represents 'pending_verification' workflow
     hackathon.publishedAt = new Date();
+    hackathon.organizerFeedback = req.body.organizerFeedback || null;
     await hackathon.save();
 
     // Email Super Admin (find any super admin)
@@ -272,13 +267,13 @@ exports.addProblemStatement = async (req, res) => {
     if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
 
     const newStatement = { ...req.body };
-    
+
     if (req.file) {
       const fileExt = req.file.originalname.split('.').pop().toLowerCase();
       if (!["pdf", "doc", "docx", "xls", "xlsx"].includes(fileExt)) {
         return res.status(400).json({ message: "Invalid file type. Only PDF, Word, and Excel allowed." });
       }
-      
+
       const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
       newStatement.referenceFile = {
         fileId: uploaded.fileId,
@@ -299,7 +294,7 @@ exports.addProblemStatement = async (req, res) => {
 
     hackathon.problemStatements.push(newStatement);
     await hackathon.save();
-    
+
     res.status(200).json({ success: true, data: hackathon });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -311,7 +306,7 @@ exports.updateProblemStatement = async (req, res) => {
     const hackathon = await Hackathon.findById(req.params.id);
     if (!hackathon) return res.status(404).json({ message: "Hackathon not found" });
     if (hackathon.organizerId.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized" });
-    
+
     const problem = hackathon.problemStatements.id(req.params.problemId);
     if (!problem) return res.status(404).json({ message: "Problem statement not found" });
 
@@ -321,7 +316,7 @@ exports.updateProblemStatement = async (req, res) => {
         return res.status(400).json({ message: `Cannot set maxTeams lower than currently assigned teams (${assignedTeams})` });
       }
     }
-    
+
     const updates = { ...req.body };
 
     if (req.file) {
@@ -329,7 +324,7 @@ exports.updateProblemStatement = async (req, res) => {
       if (!["pdf", "doc", "docx", "xls", "xlsx"].includes(fileExt)) {
         return res.status(400).json({ message: "Invalid file type. Only PDF, Word, and Excel allowed." });
       }
-      
+
       const uploaded = await uploadFile(req.file.buffer, req.file.originalname, req.file.mimetype);
       updates.referenceFile = {
         fileId: uploaded.fileId,
@@ -339,7 +334,7 @@ exports.updateProblemStatement = async (req, res) => {
         downloadUrl: uploaded.webContentLink,
         isLocal: uploaded.isLocal
       };
-      
+
       // Attempt to delete old file if it exists
       if (problem.referenceFile && problem.referenceFile.fileId) {
         deleteFile(problem.referenceFile.fileId, problem.referenceFile.isLocal).catch(console.error);
@@ -359,7 +354,7 @@ exports.updateProblemStatement = async (req, res) => {
 
     Object.assign(problem, updates);
     await hackathon.save();
-    
+
     res.status(200).json({ success: true, data: hackathon });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -392,7 +387,7 @@ exports.deleteProblemStatement = async (req, res) => {
 exports.getPublicHackathons = async (req, res) => {
   try {
     const { search, category, status, page = 1, limit = 10, sort = "-createdAt" } = req.query;
-    
+
     const query = {
       verificationStatus: "verified",
       status: { $in: ["upcoming", "registration_open", "ongoing"] },

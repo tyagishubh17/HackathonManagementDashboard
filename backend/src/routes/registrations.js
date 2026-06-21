@@ -11,6 +11,7 @@ const {
   getRegistrationStats,
   acknowledgeProblemUpdate,
   downloadResumeFile,
+  sendEmailToParticipants,
 } = require("../controllers/registrationController");
 const Hackathon = require("../models/Hackathon");
 
@@ -47,6 +48,7 @@ router.post("/my-registration/acknowledge-update", acknowledgeProblemUpdate);
 router.get("/", requireOrganizerOrSuperAdmin, getRegistrations);
 router.get("/export", requireOrganizerOrSuperAdmin, exportRegistrations);
 router.get("/stats", requireOrganizerOrSuperAdmin, getRegistrationStats);
+router.post("/email", requireOrganizerOrSuperAdmin, sendEmailToParticipants);
 router.put("/:registrationId/status", requireOrganizerOrSuperAdmin, updateRegistrationStatus);
 router.get("/:registrationId/resume", requireOrganizerOrSuperAdmin, downloadResumeFile);
 

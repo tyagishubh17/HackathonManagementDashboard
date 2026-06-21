@@ -4,11 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Mail, X } from "lucide-react";
 
 export default function RegistrationsManagement() {
   const { id } = useParams();
   const [statusFilter, setStatusFilter] = useState("");
+  const [selectedRegistrations, setSelectedRegistrations] = useState<string[]>([]);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
 
   const { data: registrations, isLoading, refetch } = useQuery({
     queryKey: ["hackathonRegistrations", id, statusFilter],
@@ -28,6 +33,45 @@ export default function RegistrationsManagement() {
     window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/hackathons/${id}/registrations/export`, "_blank");
   };
 
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedRegistrations(registrations?.map((r: any) => r._id) || []);
+    } else {
+      setSelectedRegistrations([]);
+    }
+  };
+
+  const handleSelectOne = (e: React.ChangeEvent<HTMLInputElement>, regId: string) => {
+    if (e.target.checked) {
+      setSelectedRegistrations(prev => [...prev, regId]);
+    } else {
+      setSelectedRegistrations(prev => prev.filter(id => id !== regId));
+    }
+  };
+
+  const handleSendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedRegistrations.length === 0) return alert("Select at least one participant");
+    
+    setIsSending(true);
+    try {
+      await api.post(`/hackathons/${id}/registrations/email`, {
+        registrationIds: selectedRegistrations,
+        subject: emailSubject,
+        message: emailMessage,
+      });
+      alert(`Email sent successfully to ${selectedRegistrations.length} participant(s)!`);
+      setIsEmailModalOpen(false);
+      setEmailSubject("");
+      setEmailMessage("");
+      setSelectedRegistrations([]);
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to send email");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   if (isLoading) return <div className="animate-pulse">Loading registrations...</div>;
 
   return (
@@ -44,6 +88,15 @@ export default function RegistrationsManagement() {
             <option value="confirmed">Confirmed</option>
             <option value="rejected">Rejected</option>
           </select>
+          
+          {selectedRegistrations.length > 0 && (
+            <button 
+              onClick={() => setIsEmailModalOpen(true)}
+              className="flex items-center gap-2 bg-indigo-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-indigo-700 transition shadow-sm"
+            >
+              <Mail size={16} /> Send Email ({selectedRegistrations.length})
+            </button>
+          )}
         </div>
         
         <button 
@@ -58,6 +111,14 @@ export default function RegistrationsManagement() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-gray-50 border-y">
+              <th className="py-3 px-4 text-sm font-semibold text-gray-500 w-10">
+                <input 
+                  type="checkbox" 
+                  checked={registrations?.length > 0 && selectedRegistrations.length === registrations?.length}
+                  onChange={handleSelectAll}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+              </th>
               <th className="py-3 px-4 text-sm font-semibold text-gray-500">Applicant Name</th>
               <th className="py-3 px-4 text-sm font-semibold text-gray-500">Status</th>
               <th className="py-3 px-4 text-sm font-semibold text-gray-500">AI Duplicate Score</th>
@@ -67,6 +128,14 @@ export default function RegistrationsManagement() {
           <tbody className="divide-y">
             {registrations?.map((reg: any) => (
               <tr key={reg._id} className="hover:bg-gray-50">
+                <td className="py-4 px-4">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedRegistrations.includes(reg._id)}
+                    onChange={(e) => handleSelectOne(e, reg._id)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </td>
                 <td className="py-4 px-4 font-semibold text-gray-900">{reg.userId?.fullName || "Unknown"}</td>
                 <td className="py-4 px-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -100,12 +169,58 @@ export default function RegistrationsManagement() {
             ))}
             {registrations?.length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center py-8 text-gray-500">No registrations found.</td>
+                <td colSpan={5} className="text-center py-8 text-gray-500">No registrations found.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in fade-in zoom-in relative">
+            <button 
+              onClick={() => setIsEmailModalOpen(false)} 
+              className="absolute top-6 right-6 text-gray-400 hover:text-gray-600"
+            >
+              <X size={24} />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 mb-6 flex items-center gap-2">
+              <Mail className="text-indigo-600" /> Send Email
+            </h2>
+            <form onSubmit={handleSendEmail} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Subject</label>
+                <input 
+                  type="text" 
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full border rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                  required 
+                  placeholder="e.g. Update on your Hackathon Registration"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Message</label>
+                <textarea 
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  className="w-full border rounded-xl p-3 h-32 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                  required 
+                  placeholder="Write your email content here..."
+                />
+              </div>
+              <button 
+                type="submit" 
+                disabled={isSending}
+                className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition disabled:opacity-50"
+              >
+                {isSending ? "Sending Emails..." : "Send Email"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

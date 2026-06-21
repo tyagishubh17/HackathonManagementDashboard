@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 
 export default function HackathonOverview() {
   const { id } = useParams();
@@ -19,9 +20,9 @@ export default function HackathonOverview() {
       <div className="bg-white rounded-2xl border shadow-sm p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-900">Event Details</h2>
-          <a href={`/organizer/hackathons/${id}/edit`} className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">
+          <Link href={`/organizer/hackathons/${id}/edit`} className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">
             Edit Details
-          </a>
+          </Link>
         </div>
         <div className="space-y-4">
           <div>

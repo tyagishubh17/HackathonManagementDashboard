@@ -49,6 +49,11 @@ exports.register = async (req, res) => {
   try {
     const { email, password, fullName, role, participantDetails, organizerDetails, judgeDetails } = req.body;
 
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already registered" });
+    }
+
     // Validate strong password
     const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!strongPasswordRegex.test(password)) {

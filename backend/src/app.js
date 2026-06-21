@@ -51,6 +51,7 @@ app.use("/api/reviews", csrfProtection, reviewsRouter);
 app.use("/api/teams", csrfProtection, require("./routes/userTeams"));
 app.use("/api/projects", csrfProtection, require("./routes/projects"));
 app.use("/api/evaluations", csrfProtection, require("./routes/evaluations"));
+app.use("/api/certificates", csrfProtection, require("./routes/certificates"));
 
 app.use(errorHandler);
 
