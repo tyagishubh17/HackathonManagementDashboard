@@ -13,9 +13,11 @@ const links = {
     { name: "Dashboard", href: "/participant", icon: LayoutDashboard },
     { name: "Browse Hackathons", href: "/participant/hackathons", icon: Search },
     { name: "My Registrations", href: "/participant/registrations", icon: ClipboardList },
+    { name: "My Teams", href: "/participant/teams", icon: Users },
     { name: "Certificates", href: "/participant/certificates", icon: FileText },
   ],
   organizer: [
+    { name: "Dashboard", href: "/organizer", icon: LayoutDashboard },
     { name: "My Hackathons", href: "/organizer/hackathons", icon: Calendar },
     { name: "Create Hackathon", href: "/organizer/hackathons/create", icon: PlusCircle },
   ],
