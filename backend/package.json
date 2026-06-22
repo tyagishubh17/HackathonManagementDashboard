@@ -1,0 +1,40 @@
+{
+  "name": "fairjudge-backend",
+  "version": "1.0.0",
+  "description": "FAIRJUDGE Node.js Express backend",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "csurf": "^1.2.2",
+    "dotenv": "^16.6.1",
+    "ejs": "^6.0.1",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.5.2",
+    "express-validator": "^7.2.0",
+    "google-auth-library": "^10.7.0",
+    "googleapis": "^173.0.0",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.12.0",
+    "mongoose": "^8.7.0",
+    "mongoose-delete": "^1.0.7",
+    "multer": "^2.2.0",
+    "node-cron": "^4.4.1",
+    "nodemailer": "^9.0.1",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.19.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^10.5.0",
+    "canvas": "^3.2.3",
+    "nodemon": "^3.1.7"
+  }
+}

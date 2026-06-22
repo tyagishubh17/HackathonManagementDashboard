@@ -1,0 +1,52 @@
+# IDE and OS
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Next.js / Build outputs
+.next/
+dist/
+build/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+*.egg-info/
+
+# Environment Variables (Keep Secrets Safe!)
+.env
+.env.*
+!.env.example
+!.env.template
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Docker
+.docker/
+
+# GCP / Service Account Credentials
+*service-account.json
+credentials.json
+
+# Uploaded resumes and local file storage
+uploads/

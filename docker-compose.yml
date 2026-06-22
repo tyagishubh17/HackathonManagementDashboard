@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - AI_SERVICE_URL=http://ai-service:8000
+  ai-service:
+    build: ./ai-service
+    ports:
+      - "8000:8000"
+  rag-service:
+    build: ./rag-service
+    ports:
+      - "8001:8001"
